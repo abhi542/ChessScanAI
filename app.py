@@ -4,15 +4,19 @@ import shutil
 import uvicorn
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import chess.pgn
 
 # Modular Imports
 import config
 import services
-from schema import ValidationRequest, ValidationResponse
+from schema import ValidationRequest, ValidationResponse, User, SavedGame
+import database
+import auth
+import httpx
 
 # Initialize FastAPI
 app = FastAPI(
@@ -31,15 +35,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Static Files (Frontend) ──────────────────────────────────────────────────
+# ── Static Files & Templates ─────────────────────────────────────────────────
 
 # Ensure static directory exists
 if Path("static").exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+templates = Jinja2Templates(directory="static")
+
+@app.on_event("startup")
+async def startup_event():
+    await database.connect_db()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await database.close_db()
+
 @app.get("/")
-def read_root():
-    return {"message": "ChessLensAI API is running. Visit /static/index.html"}
+def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "google_client_id": config.GOOGLE_CLIENT_ID
+    })
 
 
 # ── API Endpoints ────────────────────────────────────────────────────────────
@@ -208,6 +225,100 @@ async def upload_pgn_file(file: UploadFile = File(...)):
     finally:
         if file_path.exists():
             os.remove(file_path)
+
+# ── Auth & Database Endpoints ────────────────────────────────────────────────
+
+from pydantic import BaseModel
+
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+@app.post("/api/auth/google")
+async def google_auth(request: GoogleAuthRequest):
+    """
+    Verify Google ID token and issue a local JWT.
+    """
+    try:
+        # Verify token with Google's public endpoint
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={request.token}")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="Invalid Google token")
+            
+            user_info = resp.json()
+            email = user_info.get("email")
+            name = user_info.get("name")
+            picture = user_info.get("picture")
+
+            if not email:
+                raise HTTPException(status_code=400, detail="Email not provided by Google")
+
+            # Check if user exists in our DB, if not create them
+            user = await database.get_user_by_email(email)
+            if not user:
+                await database.create_user({"email": email, "name": name, "picture": picture})
+
+            # Issue our own JWT
+            access_token = auth.create_access_token(data={"sub": email})
+            return {"access_token": access_token, "token_type": "bearer", "user": {"email": email, "name": name, "picture": picture}}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/games")
+async def save_user_game(game: SavedGame, email: str = Depends(auth.get_current_user_email)):
+    """
+    Save a fully validated game to the current user's profile.
+    """
+    if game.user_email != email:
+        raise HTTPException(status_code=403, detail="Not authorized to save for this user")
+    
+    game_dict = game.dict()
+    # MongoDB handles datetime creation if not provided, but BaseModel already sets it.
+    game_id = await database.save_game(game_dict)
+    if not game_id:
+        raise HTTPException(status_code=500, detail="Failed to save game to database")
+    
+    return {"status": "success", "game_id": game_id}
+
+
+@app.get("/api/games")
+async def get_user_games(email: str = Depends(auth.get_current_user_email)):
+    """
+    List all games saved by the current user.
+    """
+    games = await database.list_user_games(email)
+    return {"games": games}
+
+@app.delete("/api/games/{game_id}")
+async def delete_user_game(game_id: str, email: str = Depends(auth.get_current_user_email)):
+    """
+    Delete a specific game by ID, verifying ownership.
+    """
+    from bson.objectid import ObjectId
+    from fastapi import HTTPException
+    
+    db = database.get_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not connected")
+        
+    try:
+        # Check ownership
+        game = await db.games.find_one({"_id": ObjectId(game_id)})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        if game.get("user_email") != email:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this game")
+            
+        # Delete
+        success = await database.delete_game(game_id)
+        if success:
+            return {"status": "success", "message": "Game deleted"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete game")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid game ID format")
 
 
 if __name__ == "__main__":

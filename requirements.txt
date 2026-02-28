@@ -11,3 +11,7 @@ python-multipart
 uvicorn[standard]
 pydantic
 
+motor
+PyJWT
+httpx
+jinja2

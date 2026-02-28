@@ -11,6 +11,17 @@ let gameState = {
     pgn: ""
 };
 
+let userToken = localStorage.getItem("chess_token") || null;
+let userProfile = null;
+try {
+    const profileData = localStorage.getItem("chess_profile");
+    if (profileData && profileData !== "undefined") {
+        userProfile = JSON.parse(profileData);
+    }
+} catch (e) {
+    console.error("Failed to parse user profile", e);
+}
+
 let board = null;
 let game = new Chess(); // Local chess.js instance for move validation/generation
 
@@ -19,7 +30,7 @@ $(document).ready(() => {
     // Initialize Chessboard
     board = Chessboard('board', {
         position: 'start',
-        pieceTheme: 'pieces/neo/{piece}.png',
+        pieceTheme: '/static/pieces/neo/{piece}.png',
         draggable: true,
         onDragStart: onDragStart,
         onDrop: onDrop,
@@ -30,10 +41,14 @@ $(document).ready(() => {
     $('#imageInput').on('change', handleImageUpload);
     $('#pgnInput').on('change', handlePgnUpload);
     $('#exportBtn').on('click', handleExport);
+    $('#saveGameBtn').on('click', saveGame);
     $('#btnFlip').on('click', () => board.flip());
 
     // Trigger validation when metadata changes
     $('#whitePlayer, #blackPlayer, #eventName, #siteName, #gameDate, #roundNum, #gameResult').on('change', validateMoves);
+
+    // Init Auth UI
+    updateAuthUI();
 
     // Board Navigation
     $('#btnStart').on('click', () => goToMove(-1));
@@ -109,7 +124,7 @@ async function validateMoves() {
         black_player: $('#blackPlayer').val(),
         event: $('#eventName').val(),
         site: $('#siteName').val(),
-        date: $('#gameDate').val(),
+        date: $('#gameDate').val() ? $('#gameDate').val().replace(/-/g, '.') : "",
         round: $('#roundNum').val(),
         result: $('#gameResult').val()
     };
@@ -126,6 +141,7 @@ async function validateMoves() {
         // Update State
         gameState.isValid = data.valid;
         gameState.pgn = data.pgn;
+        gameState.moves = data.annotated_moves; // Save validated moves so they can be sent to DB
 
         // Re-construct FEN list
         gameState.fens = [START_FEN];
@@ -161,6 +177,7 @@ async function validateMoves() {
 
         // Toggle Export Button
         $('#exportBtn').prop('disabled', !gameState.isValid);
+        $('#saveGameBtn').prop('disabled', !gameState.isValid || !userToken);
 
         // If we just validated, update board to the "latest" relevant position? 
         // Or keep current? Let's stay current unless out of bounds.
@@ -320,7 +337,7 @@ async function handlePgnUpload(e) {
         $('#blackPlayer').val(data.black_player || "?");
         $('#eventName').val(data.event || "?");
         $('#siteName').val(data.site || "?");
-        $('#gameDate').val(data.date || "");
+        $('#gameDate').val(data.date ? data.date.replace(/\./g, '-') : "");
         $('#roundNum').val(data.round || "?");
         $('#gameResult').val(data.result || "*");
 
@@ -329,11 +346,7 @@ async function handlePgnUpload(e) {
         gameState.pgn = data.pgn;
 
         // Populate Grid (annotated_moves has same structure as validation output)
-        gameState.moves = data.annotated_moves.map(row => ({
-            move_number: row.move_number,
-            white: row.white && row.white.san ? row.white.san : null,
-            black: row.black && row.black.san ? row.black.san : null
-        }));
+        gameState.moves = data.annotated_moves;
 
         renderGrid();
 
@@ -369,6 +382,7 @@ async function handlePgnUpload(e) {
 
         // Toggle Export Button
         $('#exportBtn').prop('disabled', !gameState.isValid);
+        $('#saveGameBtn').prop('disabled', !gameState.isValid || !userToken);
 
         updateBoardStatus();
 
@@ -448,5 +462,244 @@ function ensureRowExists(rowIdx) {
         $('#movesGrid').append(html);
         const container = document.getElementById('movesGrid');
         container.scrollTop = container.scrollHeight;
+    }
+}
+
+// -- Auth & DB --
+
+async function handleGoogleLogin(response) {
+    const idToken = response.credential;
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: idToken })
+        });
+        if (!res.ok) throw new Error("Login failed");
+
+        const data = await res.json();
+
+        // Save to local storage
+        userToken = data.access_token;
+        userProfile = data.user;
+        localStorage.setItem("chess_token", userToken);
+        localStorage.setItem("chess_profile", JSON.stringify(userProfile));
+
+        updateAuthUI();
+    } catch (e) {
+        alert("Authentication error: " + e.message);
+    }
+}
+
+function handleLogout() {
+    userToken = null;
+    userProfile = null;
+    localStorage.removeItem("chess_token");
+    localStorage.removeItem("chess_profile");
+    updateAuthUI();
+}
+
+function updateAuthUI() {
+    if (userToken && userProfile) {
+        $('#googleBtnWrapper').addClass('hidden');
+        $('#userInfo').removeClass('hidden');
+        $('#userName').text(userProfile.name);
+        $('#userAvatar').attr('src', userProfile.picture);
+        $('#saveGameBtn').removeClass('hidden');
+        $('#loadGameBtn').removeClass('hidden');
+        if (gameState.isValid) $('#saveGameBtn').prop('disabled', false);
+    } else {
+        $('#googleBtnWrapper').removeClass('hidden');
+        $('#userInfo').addClass('hidden');
+        $('#saveGameBtn').addClass('hidden');
+        $('#loadGameBtn').addClass('hidden');
+    }
+}
+
+async function saveGame() {
+    if (!gameState.isValid || !userToken) return;
+
+    const gamePayload = {
+        user_email: userProfile.email,
+        white_player: $('#whitePlayer').val() || "?",
+        black_player: $('#blackPlayer').val() || "?",
+        event: $('#eventName').val() || "?",
+        site: $('#siteName').val() || "?",
+        date: $('#gameDate').val() ? $('#gameDate').val().replace(/-/g, '.') : "",
+        round: $('#roundNum').val() || "?",
+        result: $('#gameResult').val() || "*",
+        pgn: gameState.pgn,
+        annotated_moves: gameState.moves
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/api/games`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify(gamePayload)
+        });
+
+        if (!res.ok) throw new Error("Failed to save game");
+        alert("Game saved successfully!");
+    } catch (e) {
+        alert("Error saving game: " + e.message);
+    }
+}
+
+let cachedUserGames = []; // Global to hold state for loading
+
+async function fetchUserGames() {
+    if (!userToken) return;
+    $('#gamesModal').removeClass('hidden');
+    $('#gamesListContent').html('<div class="text-center text-gray-400 py-4">Loading...</div>');
+
+    try {
+        const res = await fetch(`${API_BASE}/api/games`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch games");
+        const data = await res.json();
+
+        cachedUserGames = data.games; // store globally
+
+        let html = '<div class="space-y-2">';
+        if (cachedUserGames.length === 0) {
+            html += '<div class="text-center text-gray-500 italic py-4">No saved games found.</div>';
+        } else {
+            cachedUserGames.forEach((g, idx) => {
+                const datePart = new Date(g.created_at).toLocaleDateString();
+                html += `
+                    <div class="flex justify-between items-center p-3 bg-gray-900 border border-gray-700 rounded hover:border-gray-500 transition">
+                        <div>
+                            <div class="font-bold text-gray-200">${g.white_player} vs ${g.black_player}</div>
+                            <div class="text-xs text-gray-500">${g.event} • ${datePart}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="loadGameFromObj(${idx})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs font-semibold">Load</button>
+                            <button onclick="deleteGame('${g._id}', ${idx})" class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs font-semibold flex items-center justify-center" title="Delete Game">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        html += '</div>';
+        $('#gamesListContent').html(html);
+
+    } catch (e) {
+        $('#gamesListContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
+    }
+}
+
+function loadGameFromObj(gameIndex) {
+    const data = cachedUserGames[gameIndex];
+    if (!data) return;
+
+    $('#gamesModal').addClass('hidden');
+
+    // Update Metadata UI
+    $('#whitePlayer').val(data.white_player || "?");
+    $('#blackPlayer').val(data.black_player || "?");
+    $('#eventName').val(data.event || "?");
+    $('#siteName').val(data.site || "?");
+    $('#gameDate').val(data.date ? data.date.replace(/\./g, '-') : "");
+    $('#roundNum').val(data.round || "?");
+    $('#gameResult').val(data.result || "*");
+
+    // Update Game State
+    gameState.isValid = true;
+    gameState.pgn = data.pgn || "";
+    gameState.moves = data.annotated_moves || [];
+
+    renderGrid();
+
+    // Reset the engine and board to start
+    game = new Chess();
+    gameState.fens = [START_FEN];
+    let lastValidFen = START_FEN;
+
+    // Simulate all moves to rebuild the internal `game` state and FEN history
+    gameState.moves.forEach((row, i) => {
+        const rowEl = $(`.move-row[data-idx="${i}"]`);
+
+        // White
+        updateCellStatus(rowEl.find('.move-white'), row.white);
+        if (row.white && row.white.valid) {
+            try { game.move(row.white.san); } catch (e) { }
+            gameState.fens.push(game.fen());
+            lastValidFen = game.fen();
+        } else if (row.white) {
+            gameState.fens.push(row.white.fen || lastValidFen);
+        } else {
+            gameState.fens.push(lastValidFen);
+        }
+
+        // Black
+        updateCellStatus(rowEl.find('.move-black'), row.black);
+        if (row.black && row.black.valid) {
+            try { game.move(row.black.san); } catch (e) { }
+            gameState.fens.push(game.fen());
+            lastValidFen = game.fen();
+        } else if (row.black) {
+            gameState.fens.push(row.black.fen || lastValidFen);
+        } else {
+            gameState.fens.push(lastValidFen);
+        }
+    });
+
+    $('#exportBtn').prop('disabled', false);
+    goToMove(gameState.fens.length - 2); // go to end of loaded game
+}
+
+async function deleteGame(gameId, idx) {
+    if (!confirm("Are you sure you want to delete this game? This action cannot be undone.")) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/games/${gameId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+
+        if (!res.ok) throw new Error("Failed to delete game");
+
+        // Remove locally and re-render modal
+        cachedUserGames.splice(idx, 1);
+
+        // Sneaky update UI by just retriggering the fetch UI loop based on cached array
+        let html = '<div class="space-y-2">';
+        if (cachedUserGames.length === 0) {
+            html += '<div class="text-center text-gray-500 italic py-4">No saved games found.</div>';
+        } else {
+            cachedUserGames.forEach((g, newIdx) => {
+                const datePart = new Date(g.created_at).toLocaleDateString();
+                html += `
+                    <div class="flex justify-between items-center p-3 bg-gray-900 border border-gray-700 rounded hover:border-gray-500 transition">
+                        <div>
+                            <div class="font-bold text-gray-200">${g.white_player} vs ${g.black_player}</div>
+                            <div class="text-xs text-gray-500">${g.event} • ${datePart}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="loadGameFromObj(${newIdx})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs font-semibold">Load</button>
+                            <button onclick="deleteGame('${g._id}', ${newIdx})" class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs font-semibold flex items-center justify-center" title="Delete Game">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        html += '</div>';
+        $('#gamesListContent').html(html);
+
+    } catch (e) {
+        alert("Error deleting game: " + e.message);
     }
 }
