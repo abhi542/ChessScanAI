@@ -285,6 +285,77 @@ function updateBoardStatus() {
         // Scroll to view
         cell[0].scrollIntoView({ behavior: "smooth", block: "center" });
     }
+
+    // Trigger evaluation on new position
+    updateEvaluation(fen);
+}
+
+// -- Stockfish Evaluation --
+let evalDebounce;
+async function updateEvaluation(fen) {
+    if (!fen) return;
+
+    // Clear existing text and bar
+    $('#evalText').text("...");
+
+    clearTimeout(evalDebounce);
+    evalDebounce = setTimeout(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/evaluate?fen=${encodeURIComponent(fen)}&depth=12`);
+            if (!res.ok) throw new Error("Eval failed");
+
+            const data = await res.json();
+
+            let displayScore = "0.0";
+            let whitePercentage = 50; // default middle
+
+            // Stockfish provides score relative to the side to move.
+            const isWhiteTurn = fen.split(' ')[1] === 'w';
+
+            if (data.type === "cp") {
+                // centipawns: 100 = 1 pawn advantage
+                let pawns = data.value / 100;
+
+                // Convert to absolute advantage for White
+                if (!isWhiteTurn) pawns = -pawns;
+
+                displayScore = pawns > 0 ? `+${pawns.toFixed(1)}` : pawns.toFixed(1);
+
+                // Map score from -10 to +10 pawns into 5% -> 95% height range
+                // A score of +10 pawns means white bar is 95% height (almost totally white)
+                const clamped = Math.max(-10, Math.min(10, pawns));
+                whitePercentage = 50 + (clamped / 10) * 45;
+
+            } else if (data.type === "mate") {
+                // mate in X (relative)
+                let moves = data.value;
+
+                // Convert to absolute for White
+                if (!isWhiteTurn) moves = -moves;
+
+                displayScore = moves > 0 ? `+M${Math.abs(moves)}` : `-M${Math.abs(moves)}`;
+
+                // If moves > 0, white is mating (bar is 100% white)
+                // If moves < 0, black is mating (bar is 0% white)
+                whitePercentage = moves > 0 ? 100 : 0;
+            }
+
+            // UI Update
+            $('#evalText').text(displayScore);
+            $('#evalBarWhite').css('height', `${whitePercentage}%`);
+
+            // Adjust text color for contrast depending on if it's over the white bar or black background
+            if (whitePercentage > 50) {
+                $('#evalText').removeClass('text-gray-400 text-gray-100').addClass('text-gray-900');
+            } else {
+                $('#evalText').removeClass('text-gray-900 text-gray-400').addClass('text-gray-100');
+            }
+
+        } catch (e) {
+            console.error("Evaluation error:", e);
+            $('#evalText').text("-");
+        }
+    }, 400); // 400ms debounce to prevent spamming the backend during fast scrubbing
 }
 
 function highlightMove(rowIdx, color) {
