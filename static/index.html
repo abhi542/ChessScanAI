@@ -15,8 +15,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
 
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <!-- Custom Style -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col overflow-hidden">
@@ -26,21 +29,45 @@
         <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
             ChessLensAI
         </h1>
-        <div class="flex gap-4 items-center">
+        <div class="flex gap-2 items-center">
+            <!-- Auth Buttons -->
+            <div id="g_id_onload" data-client_id="{{ google_client_id }}" data-callback="handleGoogleLogin">
+            </div>
+            <div id="googleBtnWrapper" class="g_id_signin" data-type="standard"></div>
+
+            <div id="userInfo" class="hidden flex items-center gap-2 mr-4">
+                <img id="userAvatar" src="" class="w-8 h-8 rounded-full border border-gray-600"
+                    referrerpolicy="no-referrer">
+                <span id="userName" class="text-sm font-semibold text-gray-300"></span>
+                <button id="logoutBtn" onclick="handleLogout()"
+                    class="text-xs text-red-400 hover:text-red-300 underline ml-2">Logout</button>
+            </div>
+
+            <!-- Action Buttons -->
+            <button id="loadGameBtn" onclick="fetchUserGames()"
+                class="hidden px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                📂 <span>My Games</span>
+            </button>
+
             <input type="file" id="imageInput" accept="image/*" class="hidden">
             <button onclick="document.getElementById('imageInput').click()"
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
                 📷 <span>Upload Image</span>
             </button>
 
             <input type="file" id="pgnInput" accept=".pgn" class="hidden">
             <button onclick="document.getElementById('pgnInput').click()"
-                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
-                📂 <span>Upload PGN</span>
+                class="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                📁 <span>Upload PGN</span>
+            </button>
+
+            <button id="saveGameBtn" disabled
+                class="hidden px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                ☁️ <span>Save Game</span>
             </button>
 
             <button id="exportBtn" disabled
-                class="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                class="px-3 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
                 💾 <span>Export PGN</span>
             </button>
         </div>
@@ -75,7 +102,7 @@
                 </div>
                 <div class="flex flex-col">
                     <label class="text-xs text-gray-400">Date</label>
-                    <input type="text" id="gameDate" placeholder="YYYY.MM.DD"
+                    <input type="date" id="gameDate"
                         class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="flex flex-col">
@@ -177,7 +204,20 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Games Modal -->
+    <div id="gamesModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 w-[600px] flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-gray-100">My Saved Games</h3>
+                <button onclick="$('#gamesModal').addClass('hidden')" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="p-4 overflow-y-auto" id="gamesListContent">
+                <div class="text-center text-gray-400 py-4">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
 </body>
 
 </html>

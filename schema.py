@@ -34,3 +34,24 @@ class ValidationResponse(BaseModel):
     annotated_moves: List[dict] # Using dict for flexibility with existing structure
     valid: bool
     pgn: Optional[str] = None
+
+from datetime import datetime
+
+class User(BaseModel):
+    email: str
+    name: str
+    picture: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SavedGame(BaseModel):
+    user_email: str
+    white_player: str
+    black_player: str
+    event: str
+    site: str
+    date: str
+    round: str
+    result: str
+    pgn: str
+    annotated_moves: list[dict]
+    created_at: datetime = Field(default_factory=datetime.utcnow)

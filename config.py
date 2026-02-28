@@ -17,3 +17,9 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not GROQ_API_KEY:
     print("WARNING: GROQ_API_KEY is not set in environment variables.")
+
+# DB & Auth Configuration
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-prod")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
