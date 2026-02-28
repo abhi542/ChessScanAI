@@ -17,6 +17,15 @@ from schema import ValidationRequest, ValidationResponse, User, SavedGame
 import database
 import auth
 import httpx
+from typing import Optional
+
+try:
+    from stockfish import Stockfish
+    # Attempt to initialize with common paths; will error on route call if missing
+    STOCKFISH_PATH = "stockfish" 
+    stockfish_engine = Stockfish(path=STOCKFISH_PATH, depth=15, parameters={"Threads": 1, "Hash": 16})
+except Exception:
+    stockfish_engine = None
 
 # Initialize FastAPI
 app = FastAPI(
@@ -319,6 +328,40 @@ async def delete_user_game(game_id: str, email: str = Depends(auth.get_current_u
             raise HTTPException(status_code=500, detail="Failed to delete game")
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid game ID format")
+
+
+@app.get("/api/evaluate")
+async def evaluate_position(fen: str, depth: Optional[int] = 15):
+    """
+    Evaluate a FEN position using Stockfish and return the score.
+    Returns:
+        {"type": "cp", "value": 150} for centipawns
+        {"type": "mate", "value": 3} for mate in 3
+    """
+    if not stockfish_engine:
+        raise HTTPException(
+            status_code=503, 
+            detail="Stockfish engine is not configured on this server. Please install stockfish locally."
+        )
+        
+    try:
+        # Update depth if requested (within reasonable bounds)
+        current_depth = min(max(depth, 5), 20)
+        stockfish_engine.set_depth(current_depth)
+        
+        # Set position
+        if not stockfish_engine.is_fen_valid(fen):
+            raise HTTPException(status_code=400, detail="Invalid FEN string")
+            
+        stockfish_engine.set_fen_position(fen)
+        
+        # Get evaluation
+        eval_result = stockfish_engine.get_evaluation()
+        return eval_result
+        
+    except Exception as e:
+        print(f"Error in evaluate_position: {e}")
+        raise HTTPException(status_code=500, detail="Error evaluating position")
 
 
 if __name__ == "__main__":

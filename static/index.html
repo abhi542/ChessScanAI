@@ -140,7 +140,21 @@
 
         <!-- Right: Board Panel -->
         <div class="w-1/2 bg-gray-950 flex flex-col items-center justify-center p-8 relative">
-            <div id="board" class="w-[480px]"></div>
+            <div class="flex items-stretch gap-2 w-[664px]">
+                <!-- Evaluation Bar -->
+                <div class="w-4 bg-gray-800 rounded overflow-hidden flex flex-col-reverse outline outline-1 outline-gray-700 relative shrink-0"
+                    title="Evaluation">
+                    <!-- White Adv. (bottom up) -->
+                    <div id="evalBarWhite" class="bg-gray-100 w-full transition-all duration-300 ease-in-out"
+                        style="height: 50%;"></div>
+                    <!-- Evaluation Text -->
+                    <div id="evalText"
+                        class="absolute inset-0 flex items-center justify-center pointer-events-none text-[8px] font-bold z-10 text-gray-400">
+                        0.0</div>
+                </div>
+                <!-- Board -->
+                <div id="board" class="w-[640px] shrink-0"></div>
+            </div>
 
             <div class="mt-6 flex gap-4 items-center bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl">
                 <div class="flex gap-1">
