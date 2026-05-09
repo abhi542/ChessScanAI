@@ -18,7 +18,8 @@ import database
 import auth
 import httpx
 from typing import Optional
-
+from pydantic import BaseModel
+import openings
 try:
     from stockfish import Stockfish
     # Attempt to initialize with common paths; will error on route call if missing
@@ -361,9 +362,19 @@ async def evaluate_position(fen: str, depth: Optional[int] = 15):
         
     except Exception as e:
         print(f"Error in evaluate_position: {e}")
+        print(f"Error in evaluate_position: {e}")
         raise HTTPException(status_code=500, detail="Error evaluating position")
 
+class OpeningRequest(BaseModel):
+    fens: list[str]
 
+@app.post("/api/opening")
+async def get_opening(req: OpeningRequest):
+    """
+    Identify the ECO code and name of the opening based on game history.
+    """
+    match = openings.identify_opening(req.fens)
+    return match
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")

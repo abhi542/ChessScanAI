@@ -288,6 +288,9 @@ function updateBoardStatus() {
 
     // Trigger evaluation on new position
     updateEvaluation(fen);
+
+    // Trigger opening identification
+    updateOpening();
 }
 
 // -- Stockfish Evaluation --
@@ -356,6 +359,40 @@ async function updateEvaluation(fen) {
             $('#evalText').text("-");
         }
     }, 400); // 400ms debounce to prevent spamming the backend during fast scrubbing
+}
+
+// -- Opening Identification --
+let openingDebounce;
+async function updateOpening() {
+    // Only send valid FENs up to current move
+    const fensToSend = gameState.fens.slice(0, gameState.currentMoveIndex + 2);
+    if (fensToSend.length === 0) return;
+
+    clearTimeout(openingDebounce);
+    openingDebounce = setTimeout(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/opening`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fens: fensToSend })
+            });
+            
+            if (!res.ok) throw new Error("Opening fetch failed");
+            
+            const data = await res.json();
+            if (data.eco && data.name !== "Unknown Opening") {
+                $('#openingEco').text(data.eco);
+                $('#openingName').text(data.name);
+                $('#openingDisplay').fadeIn();
+            } else {
+                $('#openingEco').text("???");
+                $('#openingName').text("Unknown Opening");
+                $('#openingDisplay').fadeOut();
+            }
+        } catch (e) {
+            console.error("Opening error:", e);
+        }
+    }, 500); // Debounce
 }
 
 function highlightMove(rowIdx, color) {
