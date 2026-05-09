@@ -140,6 +140,13 @@
 
         <!-- Right: Board Panel -->
         <div class="w-1/2 bg-gray-950 flex flex-col items-center justify-center p-8 relative">
+            
+            <!-- Opening Display -->
+            <div id="openingDisplay" class="w-[664px] text-center mb-2 px-3 py-1 bg-gray-900 border border-gray-700 rounded text-sm font-semibold text-yellow-500 shadow-sm transition-all" style="display: none;">
+                <span id="openingEco" class="font-mono text-xs bg-gray-800 px-1 rounded mr-1">ECO</span>
+                <span id="openingName" class="text-gray-300">Unknown Opening</span>
+            </div>
+
             <div class="flex items-stretch gap-2 w-[664px]">
                 <!-- Evaluation Bar -->
                 <div class="w-4 bg-gray-800 rounded overflow-hidden flex flex-col-reverse outline outline-1 outline-gray-700 relative shrink-0"
