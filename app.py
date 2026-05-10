@@ -26,8 +26,8 @@ try:
     from stockfish import Stockfish
     
     # Find Stockfish path robustly
-    if os.path.exists("/usr/games/stockfish"):
-        STOCKFISH_PATH = "/usr/games/stockfish" # Debian/Ubuntu apt-get
+    if os.path.exists("./stockfish_bin"):
+        STOCKFISH_PATH = "./stockfish_bin" # Render bash script fallback
     elif shutil.which("stockfish"):
         STOCKFISH_PATH = "stockfish" # System PATH
     elif os.path.exists("/opt/homebrew/bin/stockfish"):
