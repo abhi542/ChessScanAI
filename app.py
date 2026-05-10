@@ -343,7 +343,7 @@ async def delete_user_game(game_id: str, email: str = Depends(auth.get_current_u
 
 
 @app.get("/api/evaluate")
-async def evaluate_position(fen: str, depth: Optional[int] = 15):
+def evaluate_position(fen: str, depth: Optional[int] = 12):
     """
     Evaluate a FEN position using Stockfish and return the score.
     Returns:
