@@ -15,4 +15,3 @@ motor
 PyJWT
 httpx
 jinja2
-stockfish
