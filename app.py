@@ -20,10 +20,21 @@ import httpx
 from typing import Optional
 from pydantic import BaseModel
 import openings
+import os
+import shutil
 try:
     from stockfish import Stockfish
-    # Attempt to initialize with common paths; will error on route call if missing
-    STOCKFISH_PATH = "stockfish" 
+    
+    # Find Stockfish path robustly
+    if os.path.exists("/usr/games/stockfish"):
+        STOCKFISH_PATH = "/usr/games/stockfish" # Debian/Ubuntu apt-get
+    elif shutil.which("stockfish"):
+        STOCKFISH_PATH = "stockfish" # System PATH
+    elif os.path.exists("/opt/homebrew/bin/stockfish"):
+        STOCKFISH_PATH = "/opt/homebrew/bin/stockfish" # Mac Homebrew fallback
+    else:
+        STOCKFISH_PATH = "stockfish"
+        
     stockfish_engine = Stockfish(path=STOCKFISH_PATH, depth=15, parameters={"Threads": 1, "Hash": 16})
 except Exception:
     stockfish_engine = None
