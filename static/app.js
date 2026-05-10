@@ -1,5 +1,5 @@
 // -- Constants --
-const API_BASE = "http://localhost:8000"; // Assuming local dev
+const API_BASE = ""; // Empty string makes it use the current domain automatically
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // -- State --
