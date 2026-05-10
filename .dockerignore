@@ -1,0 +1,9 @@
+.git
+.gitignore
+venv
+__pycache__
+*.pyc
+temp_uploads/
+output/
+.env
+.DS_Store
