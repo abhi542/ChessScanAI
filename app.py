@@ -20,6 +20,7 @@ import httpx
 from typing import Optional
 from pydantic import BaseModel
 import openings
+import review_service
 import os
 # Removed stockfish logic
 
@@ -338,6 +339,39 @@ async def get_opening(req: OpeningRequest):
     """
     match = openings.identify_opening(req.fens)
     return match
+
+class ReviewRequest(BaseModel):
+    pgn: str
+
+@app.post("/api/review")
+async def generate_game_review(req: ReviewRequest):
+    """
+    Generate a complete Game Review Card JSON from a PGN.
+    Includes Stockfish analysis, move classification, and an LLM summary.
+    """
+    try:
+        review_data = review_service.process_game_review(req.pgn)
+        return review_data
+    except Exception as e:
+        print(f"[ERROR] Game review failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ReviewSummaryRequest(BaseModel):
+    payload: dict
+
+@app.post("/api/review-summary")
+async def generate_game_review_summary_only(req: ReviewSummaryRequest):
+    """
+    Generate only the LLM summary from pre-calculated stats.
+    Useful for when Stockfish runs on the client.
+    """
+    try:
+        summary_text = review_service.generate_review_summary(req.payload)
+        return {"summary": summary_text}
+    except Exception as e:
+        print(f"[ERROR] Game review summary failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")

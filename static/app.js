@@ -41,6 +41,8 @@ $(document).ready(() => {
     $('#imageInput').on('change', handleImageUpload);
     $('#pgnInput').on('change', handlePgnUpload);
     $('#exportBtn').on('click', handleExport);
+    $('#reviewBtn').on('click', handleGameReview);
+    $('#testSummaryBtn').on('click', handleTestSummary);
     $('#saveGameBtn').on('click', saveGame);
     $('#btnFlip').on('click', () => board.flip());
 
@@ -177,6 +179,7 @@ async function validateMoves() {
 
         // Toggle Export Button
         $('#exportBtn').prop('disabled', !gameState.isValid);
+        $('#reviewBtn').prop('disabled', !gameState.isValid);
         $('#saveGameBtn').prop('disabled', !gameState.isValid || !userToken);
 
         // If we just validated, update board to the "latest" relevant position? 
@@ -419,6 +422,7 @@ async function handlePgnUpload(e) {
 
         // Toggle Export Button
         $('#exportBtn').prop('disabled', !gameState.isValid);
+        $('#reviewBtn').prop('disabled', !gameState.isValid);
         $('#saveGameBtn').prop('disabled', !gameState.isValid || !userToken);
 
         updateBoardStatus();
@@ -691,6 +695,7 @@ function loadGameFromObj(gameIndex) {
     });
 
     $('#exportBtn').prop('disabled', false);
+    $('#reviewBtn').prop('disabled', false);
     goToMove(gameState.fens.length - 2); // go to end of loaded game
 }
 
@@ -738,5 +743,243 @@ async function deleteGame(gameId, idx) {
 
     } catch (e) {
         alert("Error deleting game: " + e.message);
+    }
+}
+
+// -- Game Review --
+async function handleGameReview() {
+    if (!gameState.pgn) return;
+
+    $('#reviewModal').removeClass('hidden');
+    $('#reviewContent').html('<div class="text-center text-gray-400 py-4">Analyzing Game with Stockfish (This may take a moment)...</div>');
+
+    try {
+        const res = await fetch(`${API_BASE}/api/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pgn: gameState.pgn })
+        });
+
+        if (!res.ok) throw new Error("Failed to generate review");
+
+        const data = await res.json();
+
+        // 1. Generate SVG Graph
+        let svgPathWhite = "";
+        let svgPathBlack = "";
+        let svgDots = "";
+        if (data.eval_graph && data.eval_graph.length > 0) {
+            const width = 450;
+            const height = 80;
+            const step = width / (data.eval_graph.length - 1 || 1);
+            
+            let pts = [];
+            data.eval_graph.forEach((point, i) => {
+                let e = point.eval;
+                if (e > 10) e = 10;
+                if (e < -10) e = -10;
+                // Map -10..10 to height..0
+                const y = height - ((e + 10) / 20) * height;
+                const x = i * step;
+                pts.push({x, y, eval: point.eval});
+            });
+
+            const pointsStr = pts.map(p => `${p.x},${p.y}`).join(" ");
+            
+            // White Area (top to graph line)
+            svgPathWhite = `0,0 ${pointsStr} ${width},0`;
+            
+            // Black Area (graph line to bottom)
+            svgPathBlack = `0,${height} ${pointsStr} ${width},${height}`;
+            
+            // Just simple points to make it look active
+            pts.forEach((p, i) => {
+                if(i > 0 && i % 2 === 0 && i < pts.length -1) {
+                    const color = p.y < height/2 ? '#fff' : '#000';
+                    svgDots += `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${color}" stroke="#888" stroke-width="1"/>`;
+                }
+            });
+        }
+
+        // 2. Populate Modal
+        let html = `
+            <!-- Coach Section -->
+            <div class="flex items-start gap-4 p-6 bg-[#312e2b]">
+                <div class="w-16 h-16 shrink-0 bg-gray-600 rounded-full flex items-center justify-center text-3xl overflow-hidden border-2 border-gray-500">
+                    🧑🏾‍🏫
+                </div>
+                <div class="bg-white text-gray-900 p-4 rounded-xl rounded-tl-none relative text-sm shadow-md font-semibold w-full">
+                    <div class="absolute -left-3 top-0 w-4 h-4 bg-white" style="clip-path: polygon(100% 0, 0 0, 100% 100%);"></div>
+                    ${data.summary}
+                </div>
+            </div>
+
+            <!-- Graph Section -->
+            <div class="w-full h-[80px] bg-gray-600 relative overflow-hidden flex-shrink-0">
+                <svg width="100%" height="100%" viewBox="0 0 450 80" preserveAspectRatio="none">
+                    <polygon points="${svgPathWhite}" fill="#e3e3e3" />
+                    <polygon points="${svgPathBlack}" fill="#3b3936" />
+                    <line x1="0" y1="40" x2="450" y2="40" stroke="#888" stroke-width="1" />
+                    ${svgDots}
+                </svg>
+            </div>
+
+            <!-- Players & Accuracy -->
+            <div class="p-6">
+                <div class="flex justify-center items-center gap-16 mb-8">
+                    <!-- White -->
+                    <div class="flex flex-col items-center">
+                        <div class="text-sm font-bold text-gray-300 mb-2">White</div>
+                        <div class="w-14 h-14 bg-gray-200 rounded flex items-center justify-center mb-2 shadow-inner border border-gray-400">
+                            <img src="/static/pieces/neo/wP.png" class="w-10 h-10">
+                        </div>
+                        <div class="bg-white text-black font-bold text-xl px-3 py-1 rounded w-20 text-center shadow-sm">
+                            ${data.players.white.accuracy}
+                        </div>
+                    </div>
+                    
+                    <!-- Black -->
+                    <div class="flex flex-col items-center">
+                        <div class="text-sm font-bold text-gray-300 mb-2">Black</div>
+                        <div class="w-14 h-14 bg-[#262421] rounded flex items-center justify-center mb-2 shadow-inner border-2 border-green-500">
+                            <img src="/static/pieces/neo/bP.png" class="w-10 h-10">
+                        </div>
+                        <div class="bg-gray-800 text-white font-bold text-xl px-3 py-1 rounded w-20 text-center shadow-sm">
+                            ${data.players.black.accuracy}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Breakdown -->
+                <div class="space-y-3 px-8 text-sm font-bold text-gray-300">
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Brilliant</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#1baca6] w-4 text-right">${data.players.white.brilliant}</span>
+                            <span class="bg-[#1baca6] text-white text-xs px-1.5 py-0.5 rounded">!!</span>
+                            <span class="text-[#1baca6] w-4 text-left">${data.players.black.brilliant}</span>
+                        </div>
+                        <div class="w-1/3 text-right"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Great</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#5c8bb0] w-4 text-right">${data.players.white.great}</span>
+                            <span class="bg-[#5c8bb0] text-white text-xs px-2 py-0.5 rounded">!</span>
+                            <span class="text-[#5c8bb0] w-4 text-left">${data.players.black.great}</span>
+                        </div>
+                        <div class="w-1/3"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Best</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#81b64c] w-4 text-right">${data.players.white.best}</span>
+                            <span class="bg-[#81b64c] text-white text-xs px-1 py-0.5 rounded">★</span>
+                            <span class="text-[#81b64c] w-4 text-left">${data.players.black.best}</span>
+                        </div>
+                        <div class="w-1/3"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Mistake</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#ffa400] w-4 text-right">${data.players.white.mistake}</span>
+                            <span class="bg-[#ffa400] text-white text-xs px-1.5 py-0.5 rounded">?</span>
+                            <span class="text-[#ffa400] w-4 text-left">${data.players.black.mistake}</span>
+                        </div>
+                        <div class="w-1/3"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Miss</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#ff7769] w-4 text-right">${data.players.white.miss}</span>
+                            <span class="bg-[#ff7769] text-white text-xs px-1.5 py-0.5 rounded">✖</span>
+                            <span class="text-[#ff7769] w-4 text-left">${data.players.black.miss}</span>
+                        </div>
+                        <div class="w-1/3"></div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <div class="w-1/3">Blunder</div>
+                        <div class="w-1/3 flex justify-center gap-4">
+                            <span class="text-[#fa412d] w-4 text-right">${data.players.white.blunder}</span>
+                            <span class="bg-[#fa412d] text-white text-xs px-1 py-0.5 rounded">??</span>
+                            <span class="text-[#fa412d] w-4 text-left">${data.players.black.blunder}</span>
+                        </div>
+                        <div class="w-1/3"></div>
+                    </div>
+            </div>
+        `;
+        $('#reviewContent').html(html);
+
+        // Color Code Moves in Grid
+        data.moves.forEach((move, i) => {
+            const rowIdx = Math.floor(i / 2);
+            const isWhite = (i % 2) === 0;
+            const row = $(`.move-row[data-idx="${rowIdx}"]`);
+            const input = isWhite ? row.find('.move-white input') : row.find('.move-black input');
+            
+            // Remove previous classifications and default validation green
+            input.removeClass('text-red-400 text-yellow-400 text-green-400 text-purple-400 text-green-300 font-bold');
+            
+            if (move.classification === 'blunder' || move.classification === 'miss') {
+                input.addClass('text-red-400 font-bold');
+            } else if (move.classification === 'mistake' || move.classification === 'inaccuracy') {
+                input.addClass('text-yellow-400 font-bold');
+            } else if (['best', 'great', 'brilliant', 'excellent', 'good'].includes(move.classification)) {
+                input.addClass('text-green-400 font-bold');
+            } else {
+                // Fallback for any unknown classification
+                input.addClass('text-gray-300 font-bold');
+            }
+        });
+
+    } catch (e) {
+        $('#reviewContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
+    }
+}
+
+// -- Test Summary Endpoint --
+async function handleTestSummary() {
+    const mockPayload = {
+        "payload": {
+            "opening": "Queen's Gambit Declined",
+            "result": "White",
+            "players": {
+                "white": {
+                    "brilliant": 1, "great": 0, "best": 20, "mistake": 2, "miss": 0, "blunder": 0, "accuracy": 94.2
+                },
+                "black": {
+                    "brilliant": 0, "great": 0, "best": 15, "mistake": 4, "miss": 1, "blunder": 2, "accuracy": 72.1
+                }
+            },
+            "critical_positions": [
+                {
+                    "move": 18,
+                    "player": "Black",
+                    "classification": "Blunder",
+                    "reason": "Lost significant advantage",
+                    "fen": "r1b1kbnr/pppp1Npp/8/6q1/2BnP3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5"
+                }
+            ]
+        }
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/api/review-summary`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mockPayload)
+        });
+
+        if (!res.ok) throw new Error("Failed to test summary API");
+
+        const data = await res.json();
+        alert("Success! The standalone Summary API returned:\\n\\n" + data.summary);
+    } catch (e) {
+        alert("Error testing summary API: " + e.message);
     }
 }

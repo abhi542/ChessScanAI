@@ -14,9 +14,12 @@ OUTPUT_DIR = Path("output")
 LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
 LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ChessSheetOCR")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY_FOR_GAME_REVIEW = os.getenv("GROQ_API_KEY_FOR_GAME_REVIEW")
 
 if not GROQ_API_KEY:
     print("WARNING: GROQ_API_KEY is not set in environment variables.")
+if not GROQ_API_KEY_FOR_GAME_REVIEW:
+    print("WARNING: GROQ_API_KEY_FOR_GAME_REVIEW is not set in environment variables.")
 
 # DB & Auth Configuration
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
