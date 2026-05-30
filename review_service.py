@@ -25,13 +25,14 @@ Requirements:
 * Mention what the stronger side did well.
 * Mention the most important turning point or mistake.
 * Briefly explain how that moment affected the game.
-* End with one practical improvement tip for the player who made the key mistake.
+* End with one practical improvement tip for the player who made the key mistake. The tip MUST be general, principle-based advice.
 * Keep the tone encouraging, constructive, and educational.
 
 Strict Rules:
 
 * Use only the supplied facts.
 * Do not invent moves, tactics, plans, or events.
+* Do not suggest specific alternative moves in your improvement tip.
 * Do not mention engine evaluations.
 * Do not mention centipawns.
 * Do not mention Stockfish.

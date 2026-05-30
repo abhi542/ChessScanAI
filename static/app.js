@@ -917,8 +917,8 @@ async function handleGameReview() {
             const row = $(`.move-row[data-idx="${rowIdx}"]`);
             const input = isWhite ? row.find('.move-white input') : row.find('.move-black input');
             
-            // Remove previous classifications and default validation green
-            input.removeClass('text-red-400 text-yellow-400 text-green-400 text-purple-400 text-green-300 font-bold');
+            // Remove previous classifications and default validation colors
+            input.removeClass('text-red-400 text-yellow-400 text-green-400 text-purple-400 text-green-300 text-gray-200 text-gray-300 font-bold');
             
             if (move.classification === 'blunder' || move.classification === 'miss') {
                 input.addClass('text-red-400 font-bold');
