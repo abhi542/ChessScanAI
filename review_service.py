@@ -154,16 +154,16 @@ def process_game_review(pgn_string: str) -> dict:
             winner_text = "Draw"
 
     llm_payload = {
-        "opening": opening_name,
-        "winner": winner_text,
-        "white_accuracy": stats["white"]["accuracy"],
-        "black_accuracy": stats["black"]["accuracy"]
+        "payload": {
+            "opening": opening_name,
+            "result": winner_text,
+            "players": {
+                "white": stats["white"],
+                "black": stats["black"]
+            },
+            "critical_positions": [critical_position] if critical_position else []
+        }
     }
-    if critical_position:
-        llm_payload["critical_position"] = critical_position
-
-    # 5. Generate Summary
-    summary = generate_review_summary(llm_payload)
 
     # 6. Build Final JSON
     result = {
@@ -187,7 +187,7 @@ def process_game_review(pgn_string: str) -> dict:
         ],
         "eval_graph": eval_graph,
         "critical_positions": [critical_position] if critical_position else [],
-        "summary": summary
+        "llm_payload": llm_payload
     }
     
     return result
