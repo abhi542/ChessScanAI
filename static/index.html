@@ -70,6 +70,14 @@
                 class="px-3 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
                 💾 <span>Export PGN</span>
             </button>
+            <button id="reviewBtn" disabled
+                class="px-3 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-30 disabled:cursor-not-allowed rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                ⭐ <span>Game Review</span>
+            </button>
+            <button id="testSummaryBtn"
+                class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                💬 <span>Test Summary API</span>
+            </button>
         </div>
     </header>
 
@@ -227,7 +235,20 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=4"></script>
+    <!-- Review Modal -->
+    <div id="reviewModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#262421] rounded-xl shadow-2xl border border-gray-700 w-[500px] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800 bg-[#312e2b] rounded-t-xl">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">⭐ Game Review</h3>
+                <button onclick="$('#reviewModal').addClass('hidden')" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="p-0 overflow-y-auto custom-scrollbar flex-1 flex flex-col" id="reviewContent">
+                <div class="text-center text-gray-400 py-10">Generating Review...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=5"></script>
 </body>
 
 </html>
