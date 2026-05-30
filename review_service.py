@@ -106,19 +106,39 @@ def process_game_review(pgn_string: str) -> dict:
     opening_name = opening_match.get("name", "Unknown Opening") if opening_match else "Unknown Opening"
     opening_eco = opening_match.get("eco", "") if opening_match else ""
 
-    # 4. Extract Critical Position
-    # For MVP: Find the biggest blunder
+    # 4. Extract Critical Positions (Worst mistake and Best move)
     critical_position = None
+    best_played_move = None
     biggest_wp_loss = 0
+    
     for i, data in enumerate(moves_data):
-        if data["classification"] in ["blunder", "mistake"] and data["wp_loss"] > biggest_wp_loss:
+        # Find biggest mistake
+        if data["classification"] in ["blunder", "mistake", "miss"] and data["wp_loss"] > biggest_wp_loss:
             biggest_wp_loss = data["wp_loss"]
+            
+            reason = "Wrong Move"
+            if data["classification"] == "blunder":
+                reason = "Critical Blunder"
+            elif data["classification"] == "miss":
+                reason = "Missed Win"
+
             critical_position = {
-                "move": (i // 2) + 1,
+                "move_number": (i // 2) + 1,
                 "player": data["player"].capitalize(),
                 "classification": data["classification"].capitalize(),
-                "reason": "Lost significant advantage", # Simple reason for MVP
+                "reason": reason,
+                "played_move": data.get("san", ""),
+                "engine_recommended_move": data.get("best_move", ""),
                 "fen": data["fen"]
+            }
+            
+        # Find best move (first Brilliant or Great move found)
+        if data["classification"] in ["brilliant", "great"] and not best_played_move:
+            best_played_move = {
+                "move_number": (i // 2) + 1,
+                "player": data["player"].capitalize(),
+                "classification": data["classification"].capitalize(),
+                "played_move": data.get("san", "")
             }
 
     # Extract Eval Graph
@@ -161,7 +181,8 @@ def process_game_review(pgn_string: str) -> dict:
                 "white": stats["white"],
                 "black": stats["black"]
             },
-            "critical_positions": [critical_position] if critical_position else []
+            "critical_mistake": critical_position,
+            "notable_good_move": best_played_move
         }
     }
 
