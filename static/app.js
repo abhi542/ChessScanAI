@@ -42,7 +42,7 @@ $(document).ready(() => {
     $('#pgnInput').on('change', handlePgnUpload);
     $('#exportBtn').on('click', handleExport);
     $('#reviewBtn').on('click', handleGameReview);
-    $('#testSummaryBtn').on('click', handleTestSummary);
+    $('#summaryBtn').on('click', handleReviewSummary);
     $('#saveGameBtn').on('click', saveGame);
     $('#btnFlip').on('click', () => board.flip());
 
@@ -763,6 +763,9 @@ async function handleGameReview() {
         if (!res.ok) throw new Error("Failed to generate review");
 
         const data = await res.json();
+        
+        $('#summaryBtn').removeClass('hidden');
+        window.lastLlmPayload = data.llm_payload;
 
         // 1. Generate SVG Graph
         let svgPathWhite = "";
@@ -801,18 +804,10 @@ async function handleGameReview() {
             });
         }
 
-        // 2. Populate Modal
+        // 2. Populate Modal (Coach section is empty initially, populated by summary button)
         let html = `
-            <!-- Coach Section -->
-            <div class="flex items-start gap-4 p-6 bg-[#312e2b]">
-                <div class="w-16 h-16 shrink-0 bg-gray-600 rounded-full flex items-center justify-center text-3xl overflow-hidden border-2 border-gray-500">
-                    🧑🏾‍🏫
-                </div>
-                <div class="bg-white text-gray-900 p-4 rounded-xl rounded-tl-none relative text-sm shadow-md font-semibold w-full">
-                    <div class="absolute -left-3 top-0 w-4 h-4 bg-white" style="clip-path: polygon(100% 0, 0 0, 100% 100%);"></div>
-                    ${data.summary}
-                </div>
-            </div>
+            <!-- Coach Section (Injected later) -->
+            <div id="coachSummaryContainer"></div>
 
             <!-- Graph Section -->
             <div class="w-full h-[80px] bg-gray-600 relative overflow-hidden flex-shrink-0">
@@ -942,44 +937,46 @@ async function handleGameReview() {
     }
 }
 
-// -- Test Summary Endpoint --
-async function handleTestSummary() {
-    const mockPayload = {
-        "payload": {
-            "opening": "Queen's Gambit Declined",
-            "result": "White",
-            "players": {
-                "white": {
-                    "brilliant": 1, "great": 0, "best": 20, "mistake": 2, "miss": 0, "blunder": 0, "accuracy": 94.2
-                },
-                "black": {
-                    "brilliant": 0, "great": 0, "best": 15, "mistake": 4, "miss": 1, "blunder": 2, "accuracy": 72.1
-                }
-            },
-            "critical_positions": [
-                {
-                    "move": 18,
-                    "player": "Black",
-                    "classification": "Blunder",
-                    "reason": "Lost significant advantage",
-                    "fen": "r1b1kbnr/pppp1Npp/8/6q1/2BnP3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5"
-                }
-            ]
-        }
-    };
+// -- Decoupled Summary Endpoint --
+async function handleReviewSummary() {
+    if (!window.lastLlmPayload) {
+        alert("No game data found. Please run Game Review first!");
+        return;
+    }
+
+    // Show loading in the coach container
+    $('#reviewModal').removeClass('hidden');
+    $('#coachSummaryContainer').html(`
+        <div class="flex justify-center p-6 bg-[#312e2b]">
+            <div class="text-gray-400 italic">Asking Coach AI for summary...</div>
+        </div>
+    `);
 
     try {
         const res = await fetch(`${API_BASE}/api/review-summary`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(mockPayload)
+            body: JSON.stringify(window.lastLlmPayload)
         });
 
-        if (!res.ok) throw new Error("Failed to test summary API");
+        if (!res.ok) throw new Error("Failed to generate summary");
 
         const data = await res.json();
-        alert("Success! The standalone Summary API returned:\\n\\n" + data.summary);
+        
+        // Inject the Coach UI
+        const coachHtml = `
+            <div class="flex items-start gap-4 p-6 bg-[#312e2b]">
+                <div class="w-16 h-16 shrink-0 bg-gray-600 rounded-full flex items-center justify-center text-3xl overflow-hidden border-2 border-gray-500">
+                    🧑🏾‍🏫
+                </div>
+                <div class="bg-white text-gray-900 p-4 rounded-xl rounded-tl-none relative text-sm shadow-md font-semibold w-full">
+                    <div class="absolute -left-3 top-0 w-4 h-4 bg-white" style="clip-path: polygon(100% 0, 0 0, 100% 100%);"></div>
+                    ${data.summary}
+                </div>
+            </div>
+        `;
+        $('#coachSummaryContainer').html(coachHtml);
     } catch (e) {
-        alert("Error testing summary API: " + e.message);
+        $('#coachSummaryContainer').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
     }
 }
