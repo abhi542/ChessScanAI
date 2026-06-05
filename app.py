@@ -59,10 +59,11 @@ async def shutdown_event():
 
 @app.get("/")
 def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "google_client_id": config.GOOGLE_CLIENT_ID
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"request": request, "google_client_id": config.GOOGLE_CLIENT_ID}
+    )
 
 
 # ── API Endpoints ────────────────────────────────────────────────────────────
