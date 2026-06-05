@@ -15,3 +15,5 @@ motor
 PyJWT
 httpx
 jinja2
+google-auth
+requests

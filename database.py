@@ -13,9 +13,13 @@ async def connect_db():
         if db_state.client is None:
             try:
                 db_state.client = AsyncIOMotorClient(config.MONGO_URI)
-                # Select the default database to use
                 db_state.db = db_state.client.get_default_database("chess_ocr")
-                print("[INFO] Connected to MongoDB.")
+                import pymongo
+                await db_state.db.games.create_index([("user_id", pymongo.ASCENDING), ("created_at", pymongo.DESCENDING)])
+                await db_state.db.analysis.create_index("game_id", unique=True)
+                await db_state.db.reviews.create_index("game_id", unique=True)
+                await db_state.db.usage_metrics.create_index([("user_id", pymongo.ASCENDING), ("date", pymongo.DESCENDING)])
+                print("[INFO] Connected to MongoDB and ensured indexes.")
             except Exception as e:
                 print(f"[ERROR] Failed to connect to MongoDB: {e}")
     else:
@@ -49,14 +53,16 @@ async def save_game(game_data: dict):
     game_data["_id"] = result.inserted_id
     return str(result.inserted_id)
 
-async def list_user_games(email: str):
+async def list_user_games(user_id: str, page: int = 1, limit: int = 20):
     db = get_db()
-    if db is None: return []
-    cursor = db.games.find({"user_email": email}).sort("created_at", -1)
-    games = await cursor.to_list(length=100)
+    if db is None: return [], 0
+    skip = (page - 1) * limit
+    cursor = db.games.find({"user_id": user_id}).sort("created_at", -1).skip(skip).limit(limit)
+    total = await db.games.count_documents({"user_id": user_id})
+    games = await cursor.to_list(length=limit)
     for g in games:
         g["_id"] = str(g["_id"])
-    return games
+    return games, total
 
 async def delete_game(game_id: str):
     from bson.objectid import ObjectId
@@ -68,3 +74,62 @@ async def delete_game(game_id: str):
     except Exception as e:
         print(f"Error deleting game: {e}")
         return False
+
+async def get_game_by_id(game_id: str):
+    from bson.objectid import ObjectId
+    db = get_db()
+    if db is None: return None
+    try:
+        game = await db.games.find_one({"_id": ObjectId(game_id)})
+        if game:
+            game["_id"] = str(game["_id"])
+        return game
+    except Exception:
+        return None
+
+async def get_analysis(game_id: str):
+    db = get_db()
+    if db is None: return None
+    analysis = await db.analysis.find_one({"game_id": game_id})
+    if analysis:
+        analysis["_id"] = str(analysis["_id"])
+    return analysis
+
+async def save_or_update_analysis(game_id: str, analysis_data: dict):
+    db = get_db()
+    if db is None: return None
+    await db.analysis.update_one(
+        {"game_id": game_id},
+        {"$set": analysis_data},
+        upsert=True
+    )
+    return analysis_data
+
+async def get_review(game_id: str):
+    db = get_db()
+    if db is None: return None
+    review = await db.reviews.find_one({"game_id": game_id})
+    if review:
+        review["_id"] = str(review["_id"])
+    return review
+
+async def save_or_update_review(game_id: str, review_data: dict):
+    db = get_db()
+    if db is None: return None
+    await db.reviews.update_one(
+        {"game_id": game_id},
+        {"$set": review_data},
+        upsert=True
+    )
+    return review_data
+
+async def increment_usage_metric(user_id: str, metric_field: str):
+    from datetime import datetime
+    db = get_db()
+    if db is None: return
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    await db.usage_metrics.update_one(
+        {"user_id": user_id, "date": today},
+        {"$inc": {metric_field: 1}},
+        upsert=True
+    )
