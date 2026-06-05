@@ -13,7 +13,7 @@ import chess.pgn
 # Modular Imports
 import config
 import services
-from schema import ValidationRequest, ValidationResponse, User, SavedGame
+from schema import ValidationRequest, ValidationResponse, User, SavedGame, GameCreateRequest
 import database
 import auth
 import httpx
@@ -74,7 +74,7 @@ def health_check():
 
 
 @app.post("/api/upload")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...), user_id: str = Depends(auth.get_current_user_id)):
     """
     1. Upload Image
     2. Run OCR (via LLM Service)
@@ -93,6 +93,9 @@ async def upload_image(file: UploadFile = File(...)):
         
         # Call Service
         raw_moves = services.extract_moves(str(file_path))
+        
+        # Increment metric
+        await database.increment_usage_metric(user_id, "ocr_count")
         
         return {"moves": raw_moves}
 
@@ -262,26 +265,42 @@ async def google_auth(request: GoogleAuthRequest):
             # Check if user exists in our DB, if not create them
             user = await database.get_user_by_email(email)
             if not user:
-                await database.create_user({"email": email, "name": name, "picture": picture})
+                user = await database.create_user({"email": email, "name": name, "picture": picture, "plan": "free"})
+
+            user_id = str(user["_id"])
 
             # Issue our own JWT
-            access_token = auth.create_access_token(data={"sub": email})
-            return {"access_token": access_token, "token_type": "bearer", "user": {"email": email, "name": name, "picture": picture}}
+            access_token = auth.create_access_token(data={"sub": user_id})
+            refresh_token = auth.create_refresh_token(data={"sub": user_id})
+            return {
+                "access_token": access_token, 
+                "refresh_token": refresh_token,
+                "token_type": "bearer", 
+                "user": {"id": user_id, "email": email, "name": name, "picture": picture}
+            }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@app.post("/api/auth/refresh")
+async def refresh_token(req: RefreshRequest):
+    payload = auth.verify_refresh_token(req.refresh_token)
+    user_id = payload.get("sub")
+    access_token = auth.create_access_token(data={"sub": user_id})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 @app.post("/api/games")
-async def save_user_game(game: SavedGame, email: str = Depends(auth.get_current_user_email)):
+async def save_user_game(game: GameCreateRequest, user_id: str = Depends(auth.get_current_user_id)):
     """
     Save a fully validated game to the current user's profile.
     """
-    if game.user_email != email:
-        raise HTTPException(status_code=403, detail="Not authorized to save for this user")
-    
     game_dict = game.dict()
-    # MongoDB handles datetime creation if not provided, but BaseModel already sets it.
+    game_dict["user_id"] = user_id
     game_id = await database.save_game(game_dict)
     if not game_id:
         raise HTTPException(status_code=500, detail="Failed to save game to database")
@@ -290,15 +309,30 @@ async def save_user_game(game: SavedGame, email: str = Depends(auth.get_current_
 
 
 @app.get("/api/games")
-async def get_user_games(email: str = Depends(auth.get_current_user_email)):
+async def get_user_games(page: int = 1, limit: int = 20, user_id: str = Depends(auth.get_current_user_id)):
     """
     List all games saved by the current user.
     """
-    games = await database.list_user_games(email)
-    return {"games": games}
+    games, total = await database.list_user_games(user_id, page, limit)
+    return {
+        "items": games,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_next": (page * limit) < total
+    }
+
+@app.get("/api/games/{game_id}")
+async def get_game(game_id: str, user_id: str = Depends(auth.get_current_user_id)):
+    game = await database.get_game_by_id(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this game")
+    return game
 
 @app.delete("/api/games/{game_id}")
-async def delete_user_game(game_id: str, email: str = Depends(auth.get_current_user_email)):
+async def delete_user_game(game_id: str, user_id: str = Depends(auth.get_current_user_id)):
     """
     Delete a specific game by ID, verifying ownership.
     """
@@ -314,7 +348,7 @@ async def delete_user_game(game_id: str, email: str = Depends(auth.get_current_u
         game = await db.games.find_one({"_id": ObjectId(game_id)})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
-        if game.get("user_email") != email:
+        if game.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to delete this game")
             
         # Delete
@@ -341,32 +375,108 @@ async def get_opening(req: OpeningRequest):
     return match
 
 class ReviewRequest(BaseModel):
-    pgn: str
+    game_id: str
 
 @app.post("/api/review")
-async def generate_game_review(req: ReviewRequest):
+async def generate_game_review(req: ReviewRequest, user_id: str = Depends(auth.get_current_user_id)):
     """
-    Generate a complete Game Review Card JSON from a PGN.
-    Includes Stockfish analysis, move classification, and an LLM summary.
+    Generate a complete Game Review Card JSON from a game_id.
     """
     try:
-        review_data = review_service.process_game_review(req.pgn)
+        game = await database.get_game_by_id(req.game_id)
+        if not game or game.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail="Game not found or unauthorized")
+
+        # Cache lookup
+        analysis = await database.get_analysis(req.game_id)
+        if analysis:
+            # Validate versions
+            if analysis.get("engine_version") == config.ENGINE_VERSION and analysis.get("analysis_version") == config.ANALYSIS_VERSION:
+                return analysis["analysis_json"]
+
+        # Cache miss or stale -> Regenerate
+        review_data = review_service.process_game_review(game["pgn"])
+        
+        analysis_doc = {
+            "game_id": req.game_id,
+            "user_id": user_id,
+            "engine_version": config.ENGINE_VERSION,
+            "analysis_version": config.ANALYSIS_VERSION,
+            "analysis_json": review_data
+        }
+        await database.save_or_update_analysis(req.game_id, analysis_doc)
+        
+        # Synchronously increment usage metric for NEW analysis
+        await database.increment_usage_metric(user_id, "analysis_count")
+
         return review_data
     except Exception as e:
         print(f"[ERROR] Game review failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class ReviewSummaryRequest(BaseModel):
-    payload: dict
+    game_id: str
+    payload: Optional[dict] = None
 
 @app.post("/api/review-summary")
-async def generate_game_review_summary_only(req: ReviewSummaryRequest):
+async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: str = Depends(auth.get_current_user_id)):
     """
-    Generate only the LLM summary from pre-calculated stats.
-    Useful for when Stockfish runs on the client.
+    Generate only the LLM summary from a game_id. 
+    If a payload is provided (e.g. from the mobile app running Stockfish locally), uses that payload.
+    Otherwise, will fallback to backend analysis if missing.
     """
     try:
-        summary_text = review_service.generate_review_summary(req.payload)
+        game = await database.get_game_by_id(req.game_id)
+        if not game or game.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail="Game not found or unauthorized")
+
+        # Cache lookup for review
+        review = await database.get_review(req.game_id)
+        if review:
+            if review.get("review_version") == config.REVIEW_VERSION and review.get("llm_model") == config.MODEL_NAME:
+                return {"summary": review["review_text"]}
+
+        if req.payload:
+            # MOBILE FLOW: Mobile App ran Stockfish locally and provided the stats/mistakes
+            llm_payload = req.payload
+        else:
+            # FALLBACK/WEB FLOW: Need valid Analysis from Backend
+            analysis = await database.get_analysis(req.game_id)
+            is_analysis_valid = analysis and analysis.get("engine_version") == config.ENGINE_VERSION and analysis.get("analysis_version") == config.ANALYSIS_VERSION
+            
+            if not is_analysis_valid:
+                # Generate Analysis Backend-side
+                review_data = review_service.process_game_review(game["pgn"])
+                analysis_doc = {
+                    "game_id": req.game_id,
+                    "user_id": user_id,
+                    "engine_version": config.ENGINE_VERSION,
+                    "analysis_version": config.ANALYSIS_VERSION,
+                    "analysis_json": review_data
+                }
+                await database.save_or_update_analysis(req.game_id, analysis_doc)
+                await database.increment_usage_metric(user_id, "analysis_count")
+                analysis_json = review_data
+            else:
+                analysis_json = analysis["analysis_json"]
+
+            llm_payload = analysis_json.get("llm_payload", {})
+        
+        # Generate Review
+        summary_text = review_service.generate_review_summary(llm_payload)
+        
+        review_doc = {
+            "game_id": req.game_id,
+            "user_id": user_id,
+            "review_version": config.REVIEW_VERSION,
+            "llm_model": config.MODEL_NAME,
+            "review_text": summary_text
+        }
+        await database.save_or_update_review(req.game_id, review_doc)
+        
+        # Synchronously increment usage metric for NEW review
+        await database.increment_usage_metric(user_id, "review_count")
+
         return {"summary": summary_text}
     except Exception as e:
         print(f"[ERROR] Game review summary failed: {e}")

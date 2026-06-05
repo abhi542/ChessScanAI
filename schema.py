@@ -41,10 +41,23 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = None
+    plan: str = "free"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class GameCreateRequest(BaseModel):
+    white_player: str
+    black_player: str
+    event: str
+    site: str
+    date: str
+    round: str
+    result: str
+    pgn: str
+    annotated_moves: list[dict]
 
 class SavedGame(BaseModel):
-    user_email: str
+    user_id: str
     white_player: str
     black_player: str
     event: str
@@ -55,3 +68,31 @@ class SavedGame(BaseModel):
     pgn: str
     annotated_moves: list[dict]
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AnalysisModel(BaseModel):
+    game_id: str
+    user_id: str
+    engine_version: str
+    analysis_version: str
+    analysis_json: dict
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ReviewModel(BaseModel):
+    game_id: str
+    user_id: str
+    review_version: str
+    llm_model: str
+    review_text: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UsageMetricsModel(BaseModel):
+    user_id: str
+    date: str
+    ocr_count: int = 0
+    analysis_count: int = 0
+    review_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

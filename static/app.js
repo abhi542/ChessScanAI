@@ -4,11 +4,12 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // -- State --
 let gameState = {
-    moves: [], // Array of { move_number, white: {san, valid, fen?}, black: {...} }
-    currentMoveIndex: -1, // -1 = start, 0 = 1. White, 1 = 1. Black, etc.
-    fens: [START_FEN], // Array of FENs matching the move list (0 = Start)
+    moves: [], 
+    currentMoveIndex: -1, 
+    fens: [START_FEN], 
     isValid: false,
-    pgn: ""
+    pgn: "",
+    game_id: null
 };
 
 let userToken = localStorage.getItem("chess_token") || null;
@@ -70,6 +71,13 @@ $(document).ready(() => {
 // -- Handlers --
 
 async function handleImageUpload(e) {
+    if (!userToken) {
+        alert("Please log in with Google first to scan images.");
+        // Clear input so same file can be uploaded again if needed
+        $('#imageInput').val('');
+        return;
+    }
+
     const file = e.target.files[0];
     if (!file) return;
 
@@ -82,6 +90,9 @@ async function handleImageUpload(e) {
     try {
         const res = await fetch(`${API_BASE}/api/upload`, {
             method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${userToken}`
+            },
             body: formData
         });
 
@@ -144,6 +155,7 @@ async function validateMoves() {
         gameState.isValid = data.valid;
         gameState.pgn = data.pgn;
         gameState.moves = data.annotated_moves; // Save validated moves so they can be sent to DB
+        gameState.game_id = null; // Clear old game_id as it's a new validation state
 
         // Re-construct FEN list
         gameState.fens = [START_FEN];
@@ -365,6 +377,8 @@ async function handlePgnUpload(e) {
     try {
         const res = await fetch(`${API_BASE}/api/upload-pgn`, {
             method: 'POST',
+            // No auth required for PGN upload right now, but good practice if it changes later
+            headers: userToken ? { 'Authorization': `Bearer ${userToken}` } : {},
             body: formData
         });
 
@@ -384,6 +398,7 @@ async function handlePgnUpload(e) {
         // Update Game State
         gameState.isValid = data.valid;
         gameState.pgn = data.pgn;
+        gameState.game_id = null; // Cleared as this is a new game upload
 
         // Populate Grid (annotated_moves has same structure as validation output)
         gameState.moves = data.annotated_moves;
@@ -584,6 +599,10 @@ async function saveGame() {
         });
 
         if (!res.ok) throw new Error("Failed to save game");
+        
+        const data = await res.json();
+        gameState.game_id = data.game_id;
+        
         alert("Game saved successfully!");
     } catch (e) {
         alert("Error saving game: " + e.message);
@@ -604,14 +623,15 @@ async function fetchUserGames() {
         if (!res.ok) throw new Error("Failed to fetch games");
         const data = await res.json();
 
-        cachedUserGames = data.games; // store globally
+        cachedUserGames = data.items || []; // store globally
 
         let html = '<div class="space-y-2">';
         if (cachedUserGames.length === 0) {
             html += '<div class="text-center text-gray-500 italic py-4">No saved games found.</div>';
         } else {
             cachedUserGames.forEach((g, idx) => {
-                const datePart = new Date(g.created_at).toLocaleDateString();
+                const dateObj = new Date(g.created_at || g.date);
+                const datePart = isNaN(dateObj) ? (g.date || 'Unknown Date') : dateObj.toLocaleDateString();
                 html += `
                     <div class="flex justify-between items-center p-3 bg-gray-900 border border-gray-700 rounded hover:border-gray-500 transition">
                         <div>
@@ -657,6 +677,7 @@ function loadGameFromObj(gameIndex) {
     gameState.isValid = true;
     gameState.pgn = data.pgn || "";
     gameState.moves = data.annotated_moves || [];
+    gameState.game_id = data._id;
 
     renderGrid();
 
@@ -693,9 +714,9 @@ function loadGameFromObj(gameIndex) {
             gameState.fens.push(lastValidFen);
         }
     });
-
     $('#exportBtn').prop('disabled', false);
     $('#reviewBtn').prop('disabled', false);
+    $('#summaryBtn').removeClass('hidden'); // Allow skipping Stockfish
     goToMove(gameState.fens.length - 2); // go to end of loaded game
 }
 
@@ -748,16 +769,23 @@ async function deleteGame(gameId, idx) {
 
 // -- Game Review --
 async function handleGameReview() {
-    if (!gameState.pgn) return;
+    if (!gameState.game_id) {
+        alert("Please save the game to your profile before generating a review.");
+        return;
+    }
 
     $('#reviewModal').removeClass('hidden');
-    $('#reviewContent').html('<div class="text-center text-gray-400 py-4">Analyzing Game with Stockfish (This may take a moment)...</div>');
+    $('#reviewLoading').removeClass('hidden');
+    $('#reviewContent').html('');
 
     try {
         const res = await fetch(`${API_BASE}/api/review`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pgn: gameState.pgn })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ game_id: gameState.game_id })
         });
 
         if (!res.ok) throw new Error("Failed to generate review");
@@ -939,14 +967,15 @@ async function handleGameReview() {
 
 // -- Decoupled Summary Endpoint --
 async function handleReviewSummary() {
-    if (!window.lastLlmPayload) {
-        alert("No game data found. Please run Game Review first!");
+    if (!gameState.game_id) {
+        alert("Please save the game first!");
         return;
     }
 
-    // Show loading in the coach container
-    $('#reviewModal').removeClass('hidden');
-    $('#coachSummaryContainer').html(`
+    const originalHtml = $('#summaryBtn').html();
+    $('#summaryBtn').html('<span>Generating Coaching Summary...</span>').prop('disabled', true);
+    $('#reviewModal').removeClass('hidden'); // Ensure modal is open
+    $('#coachSummaryContainer').removeClass('hidden').html(`
         <div class="flex justify-center p-6 bg-[#312e2b]">
             <div class="text-gray-400 italic">Asking Coach AI for summary...</div>
         </div>
@@ -955,8 +984,11 @@ async function handleReviewSummary() {
     try {
         const res = await fetch(`${API_BASE}/api/review-summary`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(window.lastLlmPayload)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ game_id: gameState.game_id })
         });
 
         if (!res.ok) throw new Error("Failed to generate summary");
@@ -978,5 +1010,7 @@ async function handleReviewSummary() {
         $('#coachSummaryContainer').html(coachHtml);
     } catch (e) {
         $('#coachSummaryContainer').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
+    } finally {
+        $('#summaryBtn').html(originalHtml).prop('disabled', false);
     }
 }

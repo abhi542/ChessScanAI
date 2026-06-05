@@ -7,6 +7,9 @@ load_dotenv(override=True)
 
 # Application Config
 MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
+ENGINE_VERSION = "Stockfish17"
+ANALYSIS_VERSION = "1.0"
+REVIEW_VERSION = "1.0"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"}
 OUTPUT_DIR = Path("output")
 
