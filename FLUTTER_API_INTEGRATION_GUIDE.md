@@ -8,11 +8,15 @@ This document is the **single source of truth** for integrating the Flutter mobi
 
 **Task 1 — Google Sign In**
 *   Add `google_sign_in` package.
+*   **Google Cloud Setup (Tell Abhinav to do this when you are ready to build):**
+    *   **Android:** Provide Abhinav with your Android SHA-1 key so he can create an Android Client ID in Google Cloud Console.
+    *   **iOS:** Tell Abhinav to create an iOS Client ID so you can put it in `Info.plist`.
+    *   **Server Client ID:** When initializing `GoogleSignIn(serverClientId: "...")` in Flutter, use this exact Web Client ID: `486340681865-ges1n66nfr1u6g530m69689cl3qefe9i.apps.googleusercontent.com`.
 *   Create `AuthService`.
 *   **Responsibilities:**
     *   Trigger Google Login on device.
-    *   Get Google ID Token.
-    *   Send ID Token to backend (`/api/auth/google`).
+    *   Get Google `idToken`.
+    *   Send `idToken` to backend (`/api/auth/google`).
     *   Receive backend JWT (`access_token`, `refresh_token`).
     *   Store JWT securely.
     *   Logout.
