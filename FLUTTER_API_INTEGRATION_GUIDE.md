@@ -203,3 +203,29 @@ Here is exactly how the data looks in the MongoDB Atlas Cluster.
   "review_text": "The game started with a sharp Italian Game..."
 }
 ```
+
+---
+
+## 5. Rate Limiting & Paywalls (Crucial)
+
+The backend now enforces strict daily limits based on user subscription tiers (`free` vs `premium`). 
+
+**Limits:**
+- **Free Tier:** 5 OCR Scans & 5 Game Reviews per day.
+- **Premium Tier:** 10 OCR Scans & 10 Game Reviews per day.
+
+### How to handle the limits in Flutter:
+Both `POST /api/upload` and `POST /api/review-summary` will intercept the request *before* any compute is run if the user is out of credits.
+
+When a limit is reached, the API will return a **`403 Forbidden`** status code with the following JSON body:
+```json
+{
+  "detail": {
+    "error": "LIMIT_REACHED",
+    "feature": "ocr" // Will be "ocr" or "review"
+  }
+}
+```
+
+**Your Obligation:**
+In your API client (e.g., `Dio` or `http`), catch the `403` status code. Parse the JSON body. If `detail.error == "LIMIT_REACHED"`, immediately stop the loading spinner and trigger the native **"Upgrade to Pro"** bottom sheet / modal. Do not show a generic network error.

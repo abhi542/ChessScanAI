@@ -29,3 +29,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-prod")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+# Usage Limits
+FREE_TIER_LIMITS = {"ocr": 5, "review": 5}
+PRO_TIER_LIMITS = {"ocr": 10, "review": 10}

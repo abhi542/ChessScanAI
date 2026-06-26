@@ -96,8 +96,13 @@ async function handleImageUpload(e) {
             body: formData
         });
 
-        if (!res.ok) throw new Error("Upload failed");
-
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            if (errData.detail && errData.detail.error === "LIMIT_REACHED") {
+                throw new Error("You have reached your daily limit! Please upgrade to Pro to continue scanning games today.");
+            }
+            throw new Error(errData.detail || "Upload failed");
+        }
         const data = await res.json();
 
         // Initial raw moves
