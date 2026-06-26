@@ -81,6 +81,12 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Depends(auth
     2. Run OCR (via LLM Service)
     3. Return Raw Moves
     """
+    
+    # Check limit
+    allowed = await database.check_usage_limit(user_id, "ocr")
+    if not allowed:
+        raise HTTPException(status_code=403, detail={"error": "LIMIT_REACHED", "feature": "ocr"})
+        
     temp_dir = Path("temp_uploads")
     temp_dir.mkdir(exist_ok=True)
     
@@ -426,6 +432,12 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
     If a payload is provided (e.g. from the mobile app running Stockfish locally), uses that payload.
     Otherwise, will fallback to backend analysis if missing.
     """
+    
+    # Check limit
+    allowed = await database.check_usage_limit(user_id, "review")
+    if not allowed:
+        raise HTTPException(status_code=403, detail={"error": "LIMIT_REACHED", "feature": "review"})
+        
     try:
         game = await database.get_game_by_id(req.game_id)
         if not game or game.get("user_id") != user_id:

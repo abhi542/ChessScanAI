@@ -133,3 +133,35 @@ async def increment_usage_metric(user_id: str, metric_field: str):
         {"$inc": {metric_field: 1}},
         upsert=True
     )
+
+async def check_usage_limit(user_id: str, feature: str) -> bool:
+    """
+    Checks if the user has hit their daily limit for a specific feature.
+    feature should be "ocr" or "review".
+    Returns True if allowed, False if limit reached.
+    """
+    from datetime import datetime
+    from bson.objectid import ObjectId
+    
+    db = get_db()
+    if db is None: return True # Fail open if DB is down
+    
+    # Get user plan
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user: return False
+    
+    plan = user.get("plan", "free")
+    limits = config.PRO_TIER_LIMITS if plan == "premium" else config.FREE_TIER_LIMITS
+    max_allowed = limits.get(feature, 5)
+    
+    # Get today's usage
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    metrics = await db.usage_metrics.find_one({"user_id": user_id, "date": today})
+    
+    if not metrics:
+        return True
+        
+    metric_field = f"{feature}_count"
+    current_usage = metrics.get(metric_field, 0)
+    
+    return current_usage < max_allowed
