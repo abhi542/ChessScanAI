@@ -101,7 +101,15 @@ async function handleImageUpload(e) {
             if (errData.detail && errData.detail.error === "LIMIT_REACHED") {
                 throw new Error("You have reached your daily limit! Please upgrade to Pro to continue scanning games today.");
             }
-            throw new Error(errData.detail || "Upload failed");
+            if (errData.detail && errData.detail.error === "INVALID_IMAGE") {
+                throw new Error(errData.detail.message);
+            }
+            
+            const errorMsg = typeof errData.detail === 'string' 
+                ? errData.detail 
+                : (errData.detail?.message || "Upload failed");
+                
+            throw new Error(errorMsg);
         }
         const data = await res.json();
 
