@@ -31,5 +31,5 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 # Usage Limits
-FREE_TIER_LIMITS = {"ocr": 5, "review": 5}
+FREE_TIER_LIMITS = {"ocr": 50, "review": 50}
 PRO_TIER_LIMITS = {"ocr": 10, "review": 10}

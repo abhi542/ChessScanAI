@@ -107,8 +107,17 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Depends(auth
         return {"moves": raw_moves}
 
     except Exception as e:
-        print(f"[ERROR] Image processing failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        print(f"[ERROR] Image processing failed: {error_msg}")
+        
+        # Handle Groq refusal / tool use failure for non-chess images
+        if "tool_use_failed" in error_msg or "invalid_request_error" in error_msg:
+            raise HTTPException(
+                status_code=400, 
+                detail={"error": "INVALID_IMAGE", "message": "No valid chess scoresheet detected. Please make sure the image clearly shows a chess scoresheet."}
+            )
+            
+        raise HTTPException(status_code=500, detail=error_msg)
     finally:
         # Cleanup
         if file_path.exists():
@@ -492,9 +501,17 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
 
         return {"summary": summary_text}
     except Exception as e:
-        print(f"[ERROR] Game review summary failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        error_msg = str(e)
+        print(f"[ERROR] Game review summary failed: {error_msg}")
+        
+        # Handle Groq refusal / tool use failure 
+        if "tool_use_failed" in error_msg or "invalid_request_error" in error_msg:
+            raise HTTPException(
+                status_code=400, 
+                detail={"error": "INVALID_REVIEW", "message": "The AI could not generate a review for this game. Please ensure the game data is valid."}
+            )
+            
+        raise HTTPException(status_code=500, detail=error_msg)
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")
