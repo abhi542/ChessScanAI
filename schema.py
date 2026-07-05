@@ -42,6 +42,7 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     plan: str = "free"
+    terms_accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

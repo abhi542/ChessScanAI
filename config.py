@@ -26,7 +26,7 @@ if not GROQ_API_KEY_FOR_GAME_REVIEW:
 
 # DB & Auth Configuration
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-prod")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 

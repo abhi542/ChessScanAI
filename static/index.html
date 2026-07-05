@@ -249,7 +249,26 @@
             </div>
         </div>
     </div>
-
+    <!-- T&C Modal -->
+    <div id="tcModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 w-[500px] flex flex-col max-h-[80vh]">
+            <div class="p-6 border-b border-gray-700">
+                <h3 class="text-xl font-bold text-gray-100 mb-4">Terms and Conditions</h3>
+                <div class="text-sm text-gray-300 space-y-3 overflow-y-auto max-h-60 custom-scrollbar pr-2">
+                    <p>Welcome to ChessLensAI.</p>
+                    <p>By continuing to use this service, you agree to our Terms of Service and Privacy Policy.</p>
+                    <p>1. <strong>Usage:</strong> You agree to use this AI strictly for chess analysis.</p>
+                    <p>2. <strong>Data:</strong> We securely store your scanned games and usage metrics.</p>
+                    <p>3. <strong>Limits:</strong> Free tier limits apply and are subject to change.</p>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-900 rounded-b-lg flex justify-end">
+                <button id="btnAcceptTerms" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-semibold transition shadow">
+                    I Accept
+                </button>
+            </div>
+        </div>
+    </div>
     <script src="/static/app.js?v=5"></script>
 </body>
 
