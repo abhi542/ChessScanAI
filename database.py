@@ -39,16 +39,41 @@ async def get_user_by_email(email: str):
     if db is None: return None
     return await db.users.find_one({"email": email})
 
-async def create_user(user_data: dict):
+async def get_user_by_id(user_id: str):
+    from bson.objectid import ObjectId
     db = get_db()
     if db is None: return None
+    return await db.users.find_one({"_id": ObjectId(user_id)})
+
+async def accept_terms(user_id: str):
+    from datetime import datetime
+    from bson.objectid import ObjectId
+    db = get_db()
+    if db is None: return False
+    
+    result = await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"terms_accepted_at": datetime.utcnow()}}
+    )
+    return result.modified_count > 0
+async def create_user(user_data: dict):
+    from datetime import datetime
+    db = get_db()
+    if db is None: return None
+    now = datetime.utcnow()
+    user_data["created_at"] = now
+    user_data["updated_at"] = now
     result = await db.users.insert_one(user_data)
     user_data["_id"] = result.inserted_id
     return user_data
 
 async def save_game(game_data: dict):
+    from datetime import datetime
     db = get_db()
     if db is None: return None
+    now = datetime.utcnow()
+    game_data["created_at"] = now
+    game_data["updated_at"] = now
     result = await db.games.insert_one(game_data)
     game_data["_id"] = result.inserted_id
     return str(result.inserted_id)
@@ -96,11 +121,17 @@ async def get_analysis(game_id: str):
     return analysis
 
 async def save_or_update_analysis(game_id: str, analysis_data: dict):
+    from datetime import datetime
     db = get_db()
     if db is None: return None
+    now = datetime.utcnow()
+    analysis_data["updated_at"] = now
     await db.analysis.update_one(
         {"game_id": game_id},
-        {"$set": analysis_data},
+        {
+            "$set": analysis_data,
+            "$setOnInsert": {"created_at": now}
+        },
         upsert=True
     )
     return analysis_data
@@ -114,11 +145,17 @@ async def get_review(game_id: str):
     return review
 
 async def save_or_update_review(game_id: str, review_data: dict):
+    from datetime import datetime
     db = get_db()
     if db is None: return None
+    now = datetime.utcnow()
+    review_data["updated_at"] = now
     await db.reviews.update_one(
         {"game_id": game_id},
-        {"$set": review_data},
+        {
+            "$set": review_data,
+            "$setOnInsert": {"created_at": now}
+        },
         upsert=True
     )
     return review_data

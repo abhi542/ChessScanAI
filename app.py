@@ -73,15 +73,20 @@ def health_check():
     """Health check endpoint to verify service status."""
     return {"status": "healthy", "model": config.MODEL_NAME}
 
+async def require_accepted_terms(user_id: str = Depends(auth.get_current_user_id)) -> str:
+    user = await database.get_user_by_id(user_id)
+    if user and not user.get("terms_accepted_at"):
+        raise HTTPException(status_code=403, detail="TERMS_NOT_ACCEPTED")
+    return user_id
+
 
 @app.post("/api/upload")
-async def upload_image(file: UploadFile = File(...), user_id: str = Depends(auth.get_current_user_id)):
+async def upload_image(file: UploadFile = File(...), user_id: str = Depends(require_accepted_terms)):
     """
     1. Upload Image
     2. Run OCR (via LLM Service)
     3. Return Raw Moves
     """
-    
     # Check limit
     allowed = await database.check_usage_limit(user_id, "ocr")
     if not allowed:
@@ -292,12 +297,27 @@ async def google_auth(request: GoogleAuthRequest):
                 "access_token": access_token, 
                 "refresh_token": refresh_token,
                 "token_type": "bearer", 
-                "user": {"id": user_id, "email": email, "name": name, "picture": picture}
+                "user": {
+                    "id": user_id, 
+                    "email": email, 
+                    "name": name, 
+                    "picture": picture,
+                    "terms_accepted": bool(user.get("terms_accepted_at"))
+                }
             }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/users/accept-terms")
+async def accept_terms(user_id: str = Depends(auth.get_current_user_id)):
+    """
+    Mark the user as having accepted the terms and conditions.
+    """
+    success = await database.accept_terms(user_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to accept terms")
+    return {"status": "success", "message": "Terms accepted"}
 
 class RefreshRequest(BaseModel):
     refresh_token: str
@@ -311,7 +331,7 @@ async def refresh_token(req: RefreshRequest):
 
 
 @app.post("/api/games")
-async def save_user_game(game: GameCreateRequest, user_id: str = Depends(auth.get_current_user_id)):
+async def save_user_game(game: GameCreateRequest, user_id: str = Depends(require_accepted_terms)):
     """
     Save a fully validated game to the current user's profile.
     """
@@ -325,7 +345,7 @@ async def save_user_game(game: GameCreateRequest, user_id: str = Depends(auth.ge
 
 
 @app.get("/api/games")
-async def get_user_games(page: int = 1, limit: int = 20, user_id: str = Depends(auth.get_current_user_id)):
+async def get_user_games(page: int = 1, limit: int = 20, user_id: str = Depends(require_accepted_terms)):
     """
     List all games saved by the current user.
     """
@@ -339,7 +359,7 @@ async def get_user_games(page: int = 1, limit: int = 20, user_id: str = Depends(
     }
 
 @app.get("/api/games/{game_id}")
-async def get_game(game_id: str, user_id: str = Depends(auth.get_current_user_id)):
+async def get_game(game_id: str, user_id: str = Depends(require_accepted_terms)):
     game = await database.get_game_by_id(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -348,7 +368,7 @@ async def get_game(game_id: str, user_id: str = Depends(auth.get_current_user_id
     return game
 
 @app.delete("/api/games/{game_id}")
-async def delete_user_game(game_id: str, user_id: str = Depends(auth.get_current_user_id)):
+async def delete_user_game(game_id: str, user_id: str = Depends(require_accepted_terms)):
     """
     Delete a specific game by ID, verifying ownership.
     """
@@ -394,7 +414,7 @@ class ReviewRequest(BaseModel):
     game_id: str
 
 @app.post("/api/review")
-async def generate_game_review(req: ReviewRequest, user_id: str = Depends(auth.get_current_user_id)):
+async def generate_game_review(req: ReviewRequest, user_id: str = Depends(require_accepted_terms)):
     """
     Generate a complete Game Review Card JSON from a game_id.
     """
@@ -435,13 +455,12 @@ class ReviewSummaryRequest(BaseModel):
     payload: Optional[dict] = None
 
 @app.post("/api/review-summary")
-async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: str = Depends(auth.get_current_user_id)):
+async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: str = Depends(require_accepted_terms)):
     """
     Generate only the LLM summary from a game_id. 
     If a payload is provided (e.g. from the mobile app running Stockfish locally), uses that payload.
     Otherwise, will fallback to backend analysis if missing.
     """
-    
     # Check limit
     allowed = await database.check_usage_limit(user_id, "review")
     if not allowed:

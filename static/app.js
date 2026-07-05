@@ -45,6 +45,7 @@ $(document).ready(() => {
     $('#reviewBtn').on('click', handleGameReview);
     $('#summaryBtn').on('click', handleReviewSummary);
     $('#saveGameBtn').on('click', saveGame);
+    $('#btnAcceptTerms').on('click', acceptTerms);
     $('#btnFlip').on('click', () => board.flip());
 
     // Trigger validation when metadata changes
@@ -555,6 +556,11 @@ async function handleGoogleLogin(response) {
         localStorage.setItem("chess_profile", JSON.stringify(userProfile));
 
         updateAuthUI();
+
+        if (userProfile.terms_accepted === false) {
+            $('#tcModal').removeClass('hidden');
+        }
+
     } catch (e) {
         alert("Authentication error: " + e.message);
     }
@@ -566,6 +572,29 @@ function handleLogout() {
     localStorage.removeItem("chess_token");
     localStorage.removeItem("chess_profile");
     updateAuthUI();
+}
+
+async function acceptTerms() {
+    try {
+        const res = await fetch(`${API_BASE}/api/users/accept-terms`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            }
+        });
+        
+        if (!res.ok) throw new Error("Failed to accept terms");
+        
+        // Update local state
+        userProfile.terms_accepted = true;
+        localStorage.setItem("chess_profile", JSON.stringify(userProfile));
+        
+        // Hide modal
+        $('#tcModal').addClass('hidden');
+    } catch (e) {
+        alert("Error accepting terms: " + e.message);
+    }
 }
 
 function updateAuthUI() {
