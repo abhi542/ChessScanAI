@@ -574,6 +574,34 @@ function handleLogout() {
     updateAuthUI();
 }
 
+async function handleDeleteAccount(keepGames) {
+    try {
+        const res = await fetch(`${API_BASE}/api/users/me?keep_games=${keepGames}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${userToken}`
+            }
+        });
+        
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Failed to delete account");
+        }
+        
+        // Hide modal
+        document.getElementById('deleteAccountModal').classList.add('hidden');
+        
+        // Logout & alert
+        handleLogout();
+        alert(keepGames 
+            ? "Your account has been deleted, but your games were safely donated to help improve our AI. Thank you!" 
+            : "Your account and all your data have been permanently deleted.");
+            
+    } catch (e) {
+        alert("Error deleting account: " + e.message);
+    }
+}
+
 async function acceptTerms() {
     try {
         const res = await fetch(`${API_BASE}/api/users/accept-terms`, {

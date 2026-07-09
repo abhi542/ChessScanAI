@@ -45,6 +45,25 @@ async def get_user_by_id(user_id: str):
     if db is None: return None
     return await db.users.find_one({"_id": ObjectId(user_id)})
 
+async def delete_user_account(user_id: str, keep_games: bool):
+    from bson.objectid import ObjectId
+    db = get_db()
+    if db is None: return False
+    
+    # 1. Always delete the user profile
+    await db.users.delete_one({"_id": ObjectId(user_id)})
+    
+    # 2. Always delete their usage metrics (these aren't useful for fine-tuning anyway)
+    await db.usage_metrics.delete_many({"user_id": user_id})
+    
+    # 3. If they didn't donate games, delete games, analysis, and reviews
+    if not keep_games:
+        await db.games.delete_many({"user_id": user_id})
+        await db.analysis.delete_many({"user_id": user_id})
+        await db.reviews.delete_many({"user_id": user_id})
+        
+    return True
+
 async def accept_terms(user_id: str):
     from datetime import datetime
     from bson.objectid import ObjectId

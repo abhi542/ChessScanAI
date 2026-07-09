@@ -40,7 +40,9 @@
                     referrerpolicy="no-referrer">
                 <span id="userName" class="text-sm font-semibold text-gray-300"></span>
                 <button id="logoutBtn" onclick="handleLogout()"
-                    class="text-xs text-red-400 hover:text-red-300 underline ml-2">Logout</button>
+                    class="text-xs text-gray-400 hover:text-gray-300 underline ml-2">Logout</button>
+                <button id="deleteAccountBtn" onclick="document.getElementById('deleteAccountModal').classList.remove('hidden')"
+                    class="text-xs text-red-500 hover:text-red-400 font-semibold underline ml-2 border-l border-gray-600 pl-2">Delete Account</button>
             </div>
 
             <!-- Action Buttons -->
@@ -269,7 +271,33 @@
             </div>
         </div>
     </div>
-    <script src="/static/app.js?v=5"></script>
+    <!-- Delete Account Modal -->
+    <div id="deleteAccountModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 w-[550px] flex flex-col">
+            <div class="p-6 border-b border-gray-700 relative">
+                <button onclick="document.getElementById('deleteAccountModal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
+                <h3 class="text-xl font-bold text-red-500 mb-2">Delete Account</h3>
+                <p class="text-sm text-gray-300">We're sorry to see you go! What would you like to do with your saved games?</p>
+            </div>
+            <div class="p-6 bg-gray-900 rounded-b-lg flex flex-col gap-4">
+                <button onclick="handleDeleteAccount(true)" class="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded font-semibold text-left transition shadow flex items-center justify-between">
+                    <div>
+                        <div class="text-base">Donate Games & Delete Account</div>
+                        <div class="text-xs text-green-300 font-normal mt-1">Your profile is deleted immediately, but your games are kept anonymously to help train our AI.</div>
+                    </div>
+                    <span class="text-xl">🙌</span>
+                </button>
+                <button onclick="handleDeleteAccount(false)" class="bg-red-900 hover:bg-red-800 border border-red-700 text-white px-4 py-3 rounded font-semibold text-left transition shadow flex items-center justify-between">
+                    <div>
+                        <div class="text-base text-red-300">Delete Everything</div>
+                        <div class="text-xs text-red-400 font-normal mt-1">Your profile, stats, and all your games are permanently wiped.</div>
+                    </div>
+                    <span class="text-xl">🗑️</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/app.js?v=6"></script>
 </body>
 
 </html>
