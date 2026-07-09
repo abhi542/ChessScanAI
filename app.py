@@ -319,6 +319,17 @@ async def accept_terms(user_id: str = Depends(auth.get_current_user_id)):
         raise HTTPException(status_code=500, detail="Failed to accept terms")
     return {"status": "success", "message": "Terms accepted"}
 
+@app.delete("/api/users/me")
+async def delete_my_account(keep_games: bool = False, user_id: str = Depends(require_accepted_terms)):
+    """
+    Delete the current user's account and all associated data.
+    If keep_games is True, the user's profile is deleted but their games are kept anonymously.
+    """
+    success = await database.delete_user_account(user_id, keep_games)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete account")
+    return {"status": "success", "message": "Account deleted successfully"}
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
