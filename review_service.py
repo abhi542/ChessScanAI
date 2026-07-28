@@ -4,7 +4,7 @@ from langsmith import traceable
 
 import utils
 import config
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from engine import ChessEngine
 import review_logic
 import openings
@@ -64,10 +64,10 @@ Give one practical coaching takeaway.
 
 @traceable
 def generate_review_summary(payload: dict) -> str:
-    llm = ChatGroq(
-        model_name=config.MODEL_NAME, 
-        temperature=0, 
-        api_key=config.GROQ_API_KEY_FOR_GAME_REVIEW
+    llm = ChatGoogleGenerativeAI(
+        model=config.REVIEW_MODEL_NAME, 
+        temperature=0.6, 
+        google_api_key=config.get_gemini_key()
     ).with_config({"run_name": "game_review_summary"})
     
     messages = [
@@ -76,7 +76,13 @@ def generate_review_summary(payload: dict) -> str:
     ]
     
     response = llm.invoke(messages)
-    return response.content.strip()
+    content = response.content
+    
+    # LangChain Gemini sometimes returns a list of text blocks
+    if isinstance(content, list):
+        content = " ".join([block.get("text", "") if isinstance(block, dict) else str(block) for block in content])
+        
+    return str(content).strip()
 
 def process_game_review(pgn_string: str) -> dict:
     """

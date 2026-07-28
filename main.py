@@ -28,8 +28,9 @@ import chess
 import chess.pgn
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langsmith import traceable
+import config
 
 load_dotenv(override=True)
 
@@ -94,9 +95,20 @@ def get_image_media_type(image_path: str) -> str:
     return mime_map.get(ext, "image/jpeg")
 
 
-def create_llm() -> ChatGroq:
-    """Instantiate the Groq vision LLM."""
-    return ChatGroq(model_name=MODEL_NAME, temperature=0)
+def create_llm():
+    """Instantiate the Gemini vision LLM with a lite fallback."""
+    key = config.get_gemini_key()
+    primary = ChatGoogleGenerativeAI(
+        model=config.PRIMARY_MODEL, 
+        temperature=0.8,
+        google_api_key=key
+    )
+    fallback = ChatGoogleGenerativeAI(
+        model=config.FALLBACK_MODEL, 
+        temperature=0.8,
+        google_api_key=key
+    )
+    return primary.with_fallbacks([fallback])
 
 
 # ── Extraction (Single LLM Call) ─────────────────────────────────────────────
