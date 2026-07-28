@@ -71,7 +71,7 @@ def read_root(request: Request):
 @app.get("/health")
 def health_check():
     """Health check endpoint to verify service status."""
-    return {"status": "healthy", "model": config.MODEL_NAME}
+    return {"status": "healthy", "model": config.PRIMARY_MODEL}
 
 async def require_accepted_terms(user_id: str = Depends(auth.get_current_user_id)) -> str:
     user = await database.get_user_by_id(user_id)
@@ -485,7 +485,7 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
         # Cache lookup for review
         review = await database.get_review(req.game_id)
         if review:
-            if review.get("review_version") == config.REVIEW_VERSION and review.get("llm_model") == config.MODEL_NAME:
+            if review.get("review_version") == config.REVIEW_VERSION and review.get("llm_model") == config.PRIMARY_MODEL:
                 return {"summary": review["review_text"]}
 
         if req.payload:
@@ -521,7 +521,7 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
             "game_id": req.game_id,
             "user_id": user_id,
             "review_version": config.REVIEW_VERSION,
-            "llm_model": config.MODEL_NAME,
+            "llm_model": config.PRIMARY_MODEL,
             "review_text": summary_text
         }
         await database.save_or_update_review(req.game_id, review_doc)
