@@ -64,11 +64,18 @@ Give one practical coaching takeaway.
 
 @traceable
 def generate_review_summary(payload: dict) -> str:
-    llm = ChatGoogleGenerativeAI(
-        model=config.REVIEW_MODEL_NAME, 
+    key = config.get_gemini_key()
+    primary = ChatGoogleGenerativeAI(
+        model=config.PRIMARY_MODEL, 
         temperature=0.6, 
-        google_api_key=config.get_gemini_key()
-    ).with_config({"run_name": "game_review_summary"})
+        google_api_key=key
+    )
+    fallback = ChatGoogleGenerativeAI(
+        model=config.FALLBACK_MODEL, 
+        temperature=0.6, 
+        google_api_key=key
+    )
+    llm = primary.with_fallbacks([fallback]).with_config({"run_name": "game_review_summary"})
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
