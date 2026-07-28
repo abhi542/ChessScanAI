@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # Application Config
-MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
+PRIMARY_MODEL = "gemini-3.5-flash"
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
 ENGINE_VERSION = "Stockfish17"
 ANALYSIS_VERSION = "1.0"
 REVIEW_VERSION = "1.0"
@@ -16,13 +17,28 @@ OUTPUT_DIR = Path("output")
 # Tracing
 LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
 LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ChessSheetOCR")
+import itertools
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_KEY_FOR_GAME_REVIEW = os.getenv("GROQ_API_KEY_FOR_GAME_REVIEW")
 
+# Support multiple Gemini keys for rotation (comma-separated)
+gemini_keys_env = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEYS = [k.strip() for k in gemini_keys_env.split(",") if k.strip()]
+
 if not GROQ_API_KEY:
     print("WARNING: GROQ_API_KEY is not set in environment variables.")
-if not GROQ_API_KEY_FOR_GAME_REVIEW:
-    print("WARNING: GROQ_API_KEY_FOR_GAME_REVIEW is not set in environment variables.")
+if not GEMINI_API_KEYS:
+    print("WARNING: GEMINI_API_KEYS is not set in environment variables.")
+
+# Create an infinite round-robin iterator for the keys
+_gemini_key_cycle = itertools.cycle(GEMINI_API_KEYS) if GEMINI_API_KEYS else None
+
+def get_gemini_key() -> str:
+    """Returns the next Gemini API key in the rotation."""
+    if not _gemini_key_cycle:
+        return ""
+    return next(_gemini_key_cycle)
 
 # DB & Auth Configuration
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -30,6 +46,6 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-productio
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
-# Usage Limits
-FREE_TIER_LIMITS = {"ocr": 50, "review": 50}
-PRO_TIER_LIMITS = {"ocr": 10, "review": 10}
+# Usage Limits (Per User Per Day)
+FREE_TIER_LIMITS = {"ocr": 5, "review": 5}
+PRO_TIER_LIMITS = {"ocr": 50, "review": 50}
