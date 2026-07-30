@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # Application Config
-PRIMARY_MODEL = "gemini-3.5-flash"
-FALLBACK_MODEL = "gemini-3.5-flash-lite"
+PRIMARY_MODEL = "gemini-3.5-flash-lite"
+FALLBACK_MODEL = "gemini-3.5-flash"
 ENGINE_VERSION = "Stockfish17"
 ANALYSIS_VERSION = "1.0"
 REVIEW_VERSION = "1.0"
