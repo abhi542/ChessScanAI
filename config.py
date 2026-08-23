@@ -17,15 +17,15 @@ PATTERN_INSIGHTS_ENABLED_TIERS = ["premium", "free"]
 INSIGHTS_GAMES_COUNT = 5
 
 # Tracing
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ChessSheetOCR")
+LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").strip().lower() == "true"
+LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ChessSheetOCR").strip()
 import itertools
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_API_KEY_FOR_GAME_REVIEW = os.getenv("GROQ_API_KEY_FOR_GAME_REVIEW")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_API_KEY_FOR_GAME_REVIEW = os.getenv("GROQ_API_KEY_FOR_GAME_REVIEW", "").strip()
 
 # Support multiple Gemini keys for rotation (comma-separated)
-gemini_keys_env = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY", "")
+gemini_keys_env = (os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY", "")).strip()
 GEMINI_API_KEYS = [k.strip() for k in gemini_keys_env.split(",") if k.strip()]
 
 if not GROQ_API_KEY:
@@ -43,10 +43,10 @@ def get_gemini_key() -> str:
     return next(_gemini_key_cycle)
 
 # DB & Auth Configuration
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017").strip()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production").strip()
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 
 # Usage Limits (Per User Per Day)
 FREE_TIER_LIMITS = {"ocr": 50, "review": 50}
