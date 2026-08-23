@@ -42,6 +42,7 @@ Strict Rules:
 * Do not mention information that is not present in the input.
 * Do not use bullet points.
 * Do not use markdown.
+* Always write move numbers using numeric digits (e.g., 'move 5', not 'move five').
 * Output only the review text.
 
 Desired structure:

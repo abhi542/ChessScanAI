@@ -56,6 +56,7 @@ class GameCreateRequest(BaseModel):
     result: str
     pgn: str
     annotated_moves: list[dict]
+    its_me: Optional[str] = None
 
 class SavedGame(BaseModel):
     user_id: str
@@ -68,6 +69,7 @@ class SavedGame(BaseModel):
     result: str
     pgn: str
     annotated_moves: list[dict]
+    its_me: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -97,3 +99,9 @@ class UsageMetricsModel(BaseModel):
     review_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class InsightModel(BaseModel):
+    user_id: str
+    game_ids: list[str]
+    insight_text: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -633,12 +633,14 @@ function updateAuthUI() {
         $('#userAvatar').attr('src', userProfile.picture);
         $('#saveGameBtn').removeClass('hidden');
         $('#loadGameBtn').removeClass('hidden');
+        $('#insightsBtn').removeClass('hidden');
         if (gameState.isValid) $('#saveGameBtn').prop('disabled', false);
     } else {
         $('#googleBtnWrapper').removeClass('hidden');
         $('#userInfo').addClass('hidden');
         $('#saveGameBtn').addClass('hidden');
         $('#loadGameBtn').addClass('hidden');
+        $('#insightsBtn').addClass('hidden');
     }
 }
 
@@ -655,7 +657,8 @@ async function saveGame() {
         round: $('#roundNum').val() || "?",
         result: $('#gameResult').val() || "*",
         pgn: gameState.pgn,
-        annotated_moves: gameState.moves
+        annotated_moves: gameState.moves,
+        its_me: $('#playedAs').val() || null
     };
 
     try {
@@ -1082,5 +1085,32 @@ async function handleReviewSummary() {
         $('#coachSummaryContainer').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
     } finally {
         $('#summaryBtn').html(originalHtml).prop('disabled', false);
+    }
+}
+
+async function fetchInsights() {
+    if (!userToken) return;
+    
+    $('#insightsModal').removeClass('hidden');
+    $('#insightsContent').html('<div class="text-center text-gray-400 py-10" id="insightsLoading"><div class="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>Analyzing your games for patterns...</div>');
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/insights`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.detail || "Failed to fetch insights");
+        }
+        
+        let formatted = data.insight;
+        // Basic markdown bold replacement for bolding the headers
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/\n/g, '<br>');
+        
+        $('#insightsContent').html(formatted);
+    } catch (e) {
+        $('#insightsContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
     }
 }

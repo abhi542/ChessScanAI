@@ -79,6 +79,10 @@
             <button id="summaryBtn" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-semibold transition shadow-md hidden flex items-center gap-2">
                 <span>Game Review Summary</span>
             </button>
+            <button id="insightsBtn" onclick="fetchInsights()"
+                class="hidden px-3 py-2 bg-pink-600 hover:bg-pink-500 rounded text-sm font-semibold transition shadow-md flex items-center gap-2">
+                🧠 <span>Insights</span>
+            </button>
         </div>
     </header>
 
@@ -127,6 +131,15 @@
                         <option value="1-0">1-0</option>
                         <option value="0-1">0-1</option>
                         <option value="1/2-1/2">1/2-1/2</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <label class="text-xs text-gray-400">Played As</label>
+                    <select id="playedAs"
+                        class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
+                        <option value="">Unknown</option>
+                        <option value="white">White</option>
+                        <option value="black">Black</option>
                     </select>
                 </div>
             </div>
@@ -297,7 +310,22 @@
             </div>
         </div>
     </div>
-    <script src="/static/app.js?v=6"></script>
+    
+    <!-- Insights Modal -->
+    <div id="insightsModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden">
+        <div class="bg-[#262421] rounded-xl shadow-2xl border border-gray-700 w-[600px] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800 bg-[#312e2b] rounded-t-xl">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">🧠 Pattern Insights</h3>
+                <button onclick="$('#insightsModal').addClass('hidden')" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col text-gray-300">
+                <div id="insightsContent" class="whitespace-pre-wrap leading-relaxed text-sm">
+                    <div class="text-center text-gray-400 py-10" id="insightsLoading">Analyzing your games...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/app.js?v=7"></script>
 </body>
 
 </html>
