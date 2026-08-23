@@ -313,19 +313,26 @@
     
     <!-- Insights Modal -->
     <div id="insightsModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden">
-        <div class="bg-[#262421] rounded-xl shadow-2xl border border-gray-700 w-[600px] flex flex-col max-h-[90vh]">
+        <div class="bg-[#262421] rounded-xl shadow-2xl border border-gray-700 w-[800px] flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center p-4 border-b border-gray-800 bg-[#312e2b] rounded-t-xl">
-                <h3 class="text-lg font-bold text-white flex items-center gap-2">🧠 Pattern Insights</h3>
+                <div class="flex gap-4 items-center">
+                    <h3 id="tabCoachChat" onclick="switchInsightTab('coachChat')" class="text-lg font-bold text-blue-400 cursor-pointer border-b-2 border-blue-400 pb-1 flex items-center gap-2">🧠 Coach Chat</h3>
+                    <h3 id="tabDeepAnalysis" onclick="switchInsightTab('deepAnalysis')" class="text-lg font-bold text-gray-400 cursor-pointer hover:text-gray-200 pb-1 flex items-center gap-2">📊 Deep Analysis</h3>
+                </div>
                 <button onclick="$('#insightsModal').addClass('hidden')" class="text-gray-400 hover:text-white">✕</button>
             </div>
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col text-gray-300">
-                <div id="insightsContent" class="whitespace-pre-wrap leading-relaxed text-sm">
-                    <div class="text-center text-gray-400 py-10" id="insightsLoading">Analyzing your games...</div>
+                <div class="text-center text-gray-400 py-10" id="insightsLoading">Analyzing your games...</div>
+                
+                <div id="coachChatContent" class="hidden whitespace-pre-wrap leading-relaxed text-sm">
+                </div>
+                
+                <div id="deepAnalysisContent" class="hidden flex flex-col gap-6">
                 </div>
             </div>
         </div>
     </div>
-    <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=10"></script>
 </body>
 
 </html>

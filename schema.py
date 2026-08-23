@@ -103,5 +103,5 @@ class UsageMetricsModel(BaseModel):
 class InsightModel(BaseModel):
     user_id: str
     game_ids: list[str]
-    insight_text: str
+    insight_json: dict
     created_at: datetime = Field(default_factory=datetime.utcnow)

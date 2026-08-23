@@ -46,6 +46,27 @@ class ChessEngine:
             eval_after = info_after["score"].white().score(mate_score=10000)
             best_move_after = info_after.get("pv", [None])[0]
 
+            # Calculate phase
+            phase = "middlegame"
+            material_score = 0
+            queens_on_board = False
+            for sq in chess.SQUARES:
+                piece = board.piece_at(sq)
+                if piece and piece.piece_type != chess.PAWN and piece.piece_type != chess.KING:
+                    if piece.piece_type == chess.QUEEN:
+                        queens_on_board = True
+                        material_score += 9
+                    elif piece.piece_type == chess.ROOK:
+                        material_score += 5
+                    elif piece.piece_type in [chess.KNIGHT, chess.BISHOP]:
+                        material_score += 3
+                        
+            ply = board.ply()
+            if not queens_on_board and material_score <= 13:
+                phase = "endgame"
+            elif ply <= 24:
+                phase = "opening"
+
             # We store the evaluation AFTER the move has been played as the primary eval of this move
             # We also store eval_before so we can calculate the difference.
             moves_data.append({
@@ -56,7 +77,8 @@ class ChessEngine:
                 "eval_after": eval_after,
                 "best_move": best_move_before.uci() if best_move_before else None,
                 "played_best": best_move_before == move if best_move_before else False,
-                "fen": fen_after
+                "fen": fen_after,
+                "phase": phase
             })
 
             current_eval = eval_after
