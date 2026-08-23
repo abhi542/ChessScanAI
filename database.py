@@ -108,6 +108,17 @@ async def list_user_games(user_id: str, page: int = 1, limit: int = 20):
         g["_id"] = str(g["_id"])
     return games, total
 
+async def get_latest_games_with_tag(user_id: str, count: int = 5):
+    db = get_db()
+    if db is None: return []
+    cursor = db.games.find(
+        {"user_id": user_id, "its_me": {"$in": ["white", "black"]}}
+    ).sort("created_at", -1).limit(count)
+    games = await cursor.to_list(length=count)
+    for g in games:
+        g["_id"] = str(g["_id"])
+    return games
+
 async def delete_game(game_id: str):
     from bson.objectid import ObjectId
     db = get_db()
@@ -178,6 +189,39 @@ async def save_or_update_review(game_id: str, review_data: dict):
         upsert=True
     )
     return review_data
+
+async def get_cached_insight(user_id: str, game_ids: list[str]):
+    db = get_db()
+    if db is None: return None
+    sorted_ids = sorted(game_ids)
+    insight = await db.insights.find_one({
+        "user_id": user_id, 
+        "game_ids": sorted_ids
+    })
+    if insight:
+        insight["_id"] = str(insight["_id"])
+    return insight
+
+async def save_insight(user_id: str, game_ids: list[str], insight_text: str):
+    from datetime import datetime
+    db = get_db()
+    if db is None: return None
+    now = datetime.utcnow()
+    sorted_ids = sorted(game_ids)
+    
+    insight_data = {
+        "user_id": user_id,
+        "game_ids": sorted_ids,
+        "insight_text": insight_text,
+        "created_at": now
+    }
+    
+    await db.insights.update_one(
+        {"user_id": user_id, "game_ids": sorted_ids},
+        {"$set": insight_data},
+        upsert=True
+    )
+    return insight_data
 
 async def increment_usage_metric(user_id: str, metric_field: str):
     from datetime import datetime

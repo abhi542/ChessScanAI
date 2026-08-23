@@ -21,6 +21,7 @@ from typing import Optional
 from pydantic import BaseModel
 import openings
 import review_service
+import insights_service
 import os
 # Removed stockfish logic
 
@@ -542,6 +543,40 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
             )
             
         raise HTTPException(status_code=500, detail=error_msg)
+
+@app.get("/api/insights")
+async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
+    """
+    Generate or retrieve pattern insights based on the user's latest 5 games where they played a side.
+    """
+    user = await database.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    plan = user.get("plan", "free")
+    if plan not in config.PATTERN_INSIGHTS_ENABLED_TIERS:
+        raise HTTPException(status_code=403, detail="Pattern Insights are not enabled for your tier.")
+        
+    games = await database.get_latest_games_with_tag(user_id, count=config.INSIGHTS_GAMES_COUNT)
+    
+    if len(games) == 0:
+        return {"insight": "You don't have any games saved with the 'Played As' tag. Save some games and tag whether you played White or Black to unlock insights!"}
+        
+    game_ids = [str(g["_id"]) for g in games]
+    
+    # Check cache
+    cached = await database.get_cached_insight(user_id, game_ids)
+    if cached:
+        return {"insight": cached["insight_text"]}
+        
+    # Generate new insight
+    insight_text = await insights_service.generate_pattern_insights(user_id, games)
+    
+    # Cache it
+    await database.save_insight(user_id, game_ids, insight_text)
+    
+    return {"insight": insight_text}
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")

@@ -13,6 +13,8 @@ ANALYSIS_VERSION = "1.0"
 REVIEW_VERSION = "1.0"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"}
 OUTPUT_DIR = Path("output")
+PATTERN_INSIGHTS_ENABLED_TIERS = ["premium", "free"]
+INSIGHTS_GAMES_COUNT = 5
 
 # Tracing
 LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
