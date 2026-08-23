@@ -202,7 +202,7 @@ async def get_cached_insight(user_id: str, game_ids: list[str]):
         insight["_id"] = str(insight["_id"])
     return insight
 
-async def save_insight(user_id: str, game_ids: list[str], insight_text: str):
+async def save_insight(user_id: str, game_ids: list[str], insight_json: dict):
     from datetime import datetime
     db = get_db()
     if db is None: return None
@@ -212,7 +212,7 @@ async def save_insight(user_id: str, game_ids: list[str], insight_text: str):
     insight_data = {
         "user_id": user_id,
         "game_ids": sorted_ids,
-        "insight_text": insight_text,
+        "insight_json": insight_json,
         "created_at": now
     }
     

@@ -1088,11 +1088,103 @@ async function handleReviewSummary() {
     }
 }
 
+function switchInsightTab(tabId) {
+    if (tabId === 'coachChat') {
+        $('#tabCoachChat').addClass('text-blue-400 border-b-2 border-blue-400').removeClass('text-gray-400 hover:text-gray-200 border-transparent');
+        $('#tabDeepAnalysis').removeClass('text-blue-400 border-b-2 border-blue-400').addClass('text-gray-400 hover:text-gray-200 border-transparent');
+        $('#coachChatContent').removeClass('hidden');
+        $('#deepAnalysisContent').addClass('hidden');
+    } else {
+        $('#tabDeepAnalysis').addClass('text-blue-400 border-b-2 border-blue-400').removeClass('text-gray-400 hover:text-gray-200 border-transparent');
+        $('#tabCoachChat').removeClass('text-blue-400 border-b-2 border-blue-400').addClass('text-gray-400 hover:text-gray-200 border-transparent');
+        $('#deepAnalysisContent').removeClass('hidden');
+        $('#coachChatContent').addClass('hidden');
+    }
+}
+
+async function loadGameFromInsight(gameId, ply) {
+    if (!userToken) return;
+    
+    $('#insightsModal').addClass('hidden');
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/games/${gameId}`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.detail || "Failed to fetch game");
+        }
+        
+        // Populate UI
+        $('#whitePlayer').val(data.white_player || "?");
+        $('#blackPlayer').val(data.black_player || "?");
+        $('#eventName').val(data.event || "?");
+        $('#siteName').val(data.site || "?");
+        $('#gameDate').val(data.date ? data.date.replace(/\./g, '-') : "");
+        $('#roundNum').val(data.round || "?");
+        $('#gameResult').val(data.result || "*");
+
+        // Update Game State
+        gameState.isValid = true;
+        gameState.pgn = data.pgn || "";
+        gameState.moves = data.annotated_moves || [];
+        gameState.game_id = data._id;
+
+        renderGrid();
+
+        // Reset the engine and board to start
+        game = new Chess();
+        gameState.fens = [START_FEN];
+        
+        // Simulate all moves to rebuild the internal `game` state and FEN history
+        gameState.moves.forEach((row, i) => {
+            const rowEl = $(`.move-row[data-idx="${i}"]`);
+
+            // White
+            updateCellStatus(rowEl.find('.move-white'), row.white);
+            if (row.white && row.white.valid) {
+                try { game.move(row.white.san); } catch (e) { }
+                gameState.fens.push(game.fen());
+            } else {
+                gameState.fens.push(game.fen());
+            }
+
+            // Black
+            updateCellStatus(rowEl.find('.move-black'), row.black);
+            if (row.black && row.black.valid) {
+                try { game.move(row.black.san); } catch (e) { }
+                gameState.fens.push(game.fen());
+            } else {
+                gameState.fens.push(game.fen());
+            }
+        });
+        
+        // Jump to the specific ply where the error happened
+        currentMoveIndex = ply || 0;
+        if (currentMoveIndex > gameState.fens.length - 1) {
+            currentMoveIndex = gameState.fens.length - 1;
+        }
+        updateBoardStatus();
+        
+        // Trigger game review to load engine analysis and color-code moves
+        await handleGameReview();
+        // Automatically fetch coach summary too
+        handleReviewSummary();
+        
+    } catch (e) {
+        alert("Could not load game: " + e.message);
+    }
+}
+
 async function fetchInsights() {
     if (!userToken) return;
     
     $('#insightsModal').removeClass('hidden');
-    $('#insightsContent').html('<div class="text-center text-gray-400 py-10" id="insightsLoading"><div class="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>Analyzing your games for patterns...</div>');
+    $('#insightsLoading').removeClass('hidden');
+    $('#coachChatContent').addClass('hidden');
+    $('#deepAnalysisContent').addClass('hidden');
     
     try {
         const res = await fetch(`${API_BASE}/api/insights`, {
@@ -1104,13 +1196,186 @@ async function fetchInsights() {
             throw new Error(data.detail || "Failed to fetch insights");
         }
         
-        let formatted = data.insight;
-        // Basic markdown bold replacement for bolding the headers
+        if (data.error) {
+            $('#insightsLoading').addClass('hidden');
+            $('#coachChatContent').html(`<div class="text-gray-400 text-center py-4">${data.error}</div>`).removeClass('hidden');
+            switchInsightTab('coachChat');
+            return;
+        }
+        
+        // Coach Chat
+        let formatted = data.coach_chat || data.insight || "";
         formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         formatted = formatted.replace(/\n/g, '<br>');
         
-        $('#insightsContent').html(formatted);
+        $('#coachChatContent').html(formatted);
+        
+        // Deep Analysis
+        let da = data.deep_analysis;
+        if (da) {
+            // Phase HTML
+            let phaseHtml = `
+                <div>
+                    <h4 class="text-white font-bold mb-3 border-b border-gray-700 pb-1">Accuracy by Phase</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700 shadow-sm">
+                            <div class="text-xs text-gray-400 mb-1">Opening</div>
+                            <div class="text-xl text-white font-mono">${da.accuracy_by_phase.opening}%</div>
+                            <div class="w-full bg-gray-700 h-1.5 mt-2 rounded-full overflow-hidden"><div class="bg-blue-500 h-full" style="width: ${da.accuracy_by_phase.opening}%"></div></div>
+                        </div>
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700 shadow-sm">
+                            <div class="text-xs text-gray-400 mb-1">Middlegame</div>
+                            <div class="text-xl text-white font-mono">${da.accuracy_by_phase.middlegame}%</div>
+                            <div class="w-full bg-gray-700 h-1.5 mt-2 rounded-full overflow-hidden"><div class="bg-purple-500 h-full" style="width: ${da.accuracy_by_phase.middlegame}%"></div></div>
+                        </div>
+                        <div class="bg-gray-800 p-3 rounded border border-gray-700 shadow-sm">
+                            <div class="text-xs text-gray-400 mb-1">Endgame</div>
+                            <div class="text-xl text-white font-mono">${da.accuracy_by_phase.endgame}%</div>
+                            <div class="w-full bg-gray-700 h-1.5 mt-2 rounded-full overflow-hidden"><div class="bg-green-500 h-full" style="width: ${da.accuracy_by_phase.endgame}%"></div></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Problematic Pieces HTML
+            let pieceHtml = `
+                <div>
+                    <h4 class="text-white font-bold mb-3 border-b border-gray-700 pb-1">Problematic Pieces</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            `;
+            
+            const pieceIcons = {
+                'pawn': '♙', 'knight': '♘', 'bishop': '♗', 'rook': '♖', 'queen': '♕', 'king': '♔'
+            };
+            
+            for (const [piece, stats] of Object.entries(da.problematic_pieces)) {
+                let onClickAttr = "";
+                let cursorCls = "";
+                let hoverCls = "";
+                if (stats.example) {
+                    onClickAttr = `onclick="loadGameFromInsight('${stats.example.game_id}', ${stats.example.ply})"`;
+                    cursorCls = "cursor-pointer";
+                    hoverCls = "hover:bg-gray-700 hover:border-gray-500 transition-colors group";
+                }
+                
+                pieceHtml += `
+                    <div ${onClickAttr} class="bg-gray-800 p-2 rounded border border-gray-700 flex items-center justify-between shadow-sm ${cursorCls} ${hoverCls}">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl opacity-80">${pieceIcons[piece] || ''}</span>
+                            <span class="capitalize text-sm text-gray-300 font-medium">${piece}</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-orange-400 font-bold group-hover:text-orange-300 transition-colors">${stats.percentage}%</div>
+                            <div class="text-[10px] text-gray-500">${stats.count} err</div>
+                        </div>
+                    </div>
+                `;
+            }
+            pieceHtml += `</div></div>`;
+            
+            // Categories HTML
+            let catHtml = `
+                <div>
+                    <h4 class="text-white font-bold mb-3 border-b border-gray-700 pb-1">Mistakes by Category</h4>
+                    <div class="flex flex-col gap-2 bg-gray-800 p-4 rounded border border-gray-700">
+            `;
+            
+            // Sort categories by count descending
+            const sortedCats = Object.entries(da.mistakes_by_category || {}).sort((a,b) => b[1] - a[1]);
+            const maxCatCount = sortedCats.length > 0 ? Math.max(1, sortedCats[0][1]) : 1;
+            
+            if (sortedCats.length === 0) {
+                catHtml += `<div class="text-sm text-gray-500 italic">No category data available.</div>`;
+            } else {
+                for (const [cat, count] of sortedCats) {
+                    if (count === 0) continue;
+                    let pct = (count / maxCatCount) * 100;
+                    catHtml += `
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-300 w-1/3 truncate" title="${cat}">${cat}</span>
+                            <div class="w-1/2 bg-gray-900 h-2.5 rounded-full mx-2 overflow-hidden border border-gray-700">
+                                <div class="bg-red-500 h-full rounded-r-full" style="width: ${pct}%"></div>
+                            </div>
+                            <span class="text-gray-400 w-8 text-right font-mono text-xs">${count}</span>
+                        </div>
+                    `;
+                }
+            }
+            catHtml += `</div></div>`;
+            
+            // Heatmap basic HTML
+            let topSquares = Object.entries(da.error_heatmap || {}).sort((a,b) => b[1].count - a[1].count);
+            let heatHtml = `
+                <div>
+                    <h4 class="text-white font-bold mb-3 border-b border-gray-700 pb-1">Error Heatmap</h4>
+                    <div class="flex gap-6 items-start">
+                        <div id="heatmapBoard" style="width: 200px" class="flex-shrink-0 shadow-lg rounded overflow-hidden border border-gray-700"></div>
+                        <div class="flex-1 flex flex-col gap-2">
+                            <div class="text-sm text-gray-400 mb-1">Top Blundered Squares</div>
+            `;
+            if (topSquares.length === 0) {
+                 heatHtml += `<span class="text-sm text-gray-500 italic">No squares identified.</span>`;
+            } else {
+                for (const [sq, count_obj] of topSquares.slice(0, 5)) {
+                    let count = count_obj.count;
+                    let ex = count_obj.example;
+                    
+                    let onClickAttr = "";
+                    let cursorCls = "";
+                    let hoverCls = "";
+                    let actionText = "";
+                    if (ex) {
+                        onClickAttr = `onclick="loadGameFromInsight('${ex.game_id}', ${ex.ply})"`;
+                        cursorCls = "cursor-pointer";
+                        hoverCls = "hover:bg-gray-700 hover:border-gray-500 transition-colors group";
+                        actionText = `<span class="opacity-0 group-hover:opacity-100 text-[10px] text-blue-400 ml-2 transition-opacity">View Game &rarr;</span>`;
+                    }
+                    
+                    heatHtml += `
+                        <div ${onClickAttr} class="flex items-center justify-between text-sm bg-gray-800 p-2 rounded shadow-sm border border-gray-700 ${cursorCls} ${hoverCls}">
+                            <div class="flex items-center">
+                                <span class="text-gray-300 font-mono font-bold group-hover:text-white transition-colors">Square ${sq}</span>
+                                ${actionText}
+                            </div>
+                            <span class="text-red-400 font-mono text-xs">${count} errors</span>
+                        </div>
+                    `;
+                }
+            }
+            heatHtml += `</div></div></div>`;
+            
+            $('#deepAnalysisContent').html(phaseHtml + pieceHtml + catHtml + heatHtml);
+            
+            if (topSquares.length > 0) {
+                let maxCount = topSquares[0][1].count;
+                let board = Chessboard('heatmapBoard', {
+                    showNotation: false,
+                    position: 'empty',
+                    pieceTheme: '/static/pieces/neo/{piece}.png'
+                });
+                
+                setTimeout(() => {
+                    for (const [sq, count_obj] of topSquares) {
+                        let count = count_obj.count;
+                        let intensity = Math.min(count / maxCount, 1);
+                        let opacity = 0.3 + (intensity * 0.7); // scale 0.3 to 1.0
+                        let rgba = `rgba(220, 38, 38, ${opacity})`;
+                        $('#heatmapBoard .square-' + sq).append(
+                            `<div style="width:100%; height:100%; background-color: ${rgba}; display: flex; align-items: center; justify-content: center; font-size: 11px; color: white; font-weight: bold; text-shadow: 1px 1px 2px black; pointer-events: none;">${count}</div>`
+                        );
+                    }
+                }, 100);
+            }
+        } else {
+            $('#deepAnalysisContent').html(`<div class="text-gray-400 text-center py-4">Deep Analysis data not available.</div>`);
+        }
+        
+        $('#insightsLoading').addClass('hidden');
+        switchInsightTab('coachChat');
+        
     } catch (e) {
-        $('#insightsContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`);
+        $('#insightsLoading').addClass('hidden');
+        $('#coachChatContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`).removeClass('hidden');
+        switchInsightTab('coachChat');
     }
 }

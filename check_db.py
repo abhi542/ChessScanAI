@@ -1,27 +1,20 @@
 import asyncio
-from database import get_latest_games_with_tag, get_analysis, connect_db, close_db
+import database
+import json
 
 async def main():
-    await connect_db()
+    await database.connect_db()
+    db = database.get_db()
+    cursor = db.analysis.find().limit(5)
+    async for doc in cursor:
+        stats = doc["analysis_json"]["players"]["white"]
+        print(f"Game ID: {doc['game_id']}")
+        print(f"White stats keys: {stats.keys()}")
+        if "accuracy_by_phase" in stats:
+            print(f"accuracy_by_phase: {stats['accuracy_by_phase']}")
+        else:
+            print("NO ACCURACY BY PHASE!")
     
-    # We will fetch the user from one of the games the user provided.
-    user_id = "6a22c958fa1d102437df28d6"
-    
-    games = await get_latest_games_with_tag(user_id)
-    print(f"Found {len(games)} games with its_me tag.")
-    
-    analyzed_count = 0
-    for g in games:
-        game_id = g["_id"]
-        analysis = await get_analysis(game_id)
-        print(f"Game {game_id} - its_me: {g.get('its_me')} - Analysis exists: {analysis is not None}")
-        if analysis:
-            analyzed_count += 1
-            print(f"  Analysis keys: {analysis['analysis_json'].keys()}")
-            print(f"  Players: {analysis['analysis_json'].get('players')}")
-            
-    print(f"Total analyzed games: {analyzed_count}")
-    await close_db()
+    await database.close_db()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())

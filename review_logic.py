@@ -19,12 +19,20 @@ def classify_moves(moves_data: list):
     Process raw engine data, calculate win probability drops, and classify each move.
     """
     stats = {
-        "white": {"brilliant": 0, "great": 0, "best": 0, "mistake": 0, "miss": 0, "blunder": 0},
-        "black": {"brilliant": 0, "great": 0, "best": 0, "mistake": 0, "miss": 0, "blunder": 0}
+        "white": {
+            "brilliant": 0, "great": 0, "best": 0, "mistake": 0, "miss": 0, "blunder": 0,
+            "accuracy_by_phase": {"opening": 0, "middlegame": 0, "endgame": 0}
+        },
+        "black": {
+            "brilliant": 0, "great": 0, "best": 0, "mistake": 0, "miss": 0, "blunder": 0,
+            "accuracy_by_phase": {"opening": 0, "middlegame": 0, "endgame": 0}
+        }
     }
 
-    white_wp_losses = []
-    black_wp_losses = []
+    wp_losses = {
+        "white": {"all": [], "opening": [], "middlegame": [], "endgame": []},
+        "black": {"all": [], "opening": [], "middlegame": [], "endgame": []}
+    }
 
     for i, data in enumerate(moves_data):
         player = data["player"]
@@ -78,20 +86,24 @@ def classify_moves(moves_data: list):
         if classification in stats[player]:
             stats[player][classification] += 1
 
-        if player == "white":
-            white_wp_losses.append(wp_loss)
-        else:
-            black_wp_losses.append(wp_loss)
+        phase = data.get("phase", "middlegame")
+        wp_losses[player]["all"].append(wp_loss)
+        if phase in wp_losses[player]:
+            wp_losses[player][phase].append(wp_loss)
 
     # Calculate Accuracy
     k = 0.05 # Tuning constant
-    avg_white_loss = sum(white_wp_losses) / len(white_wp_losses) if white_wp_losses else 0
-    avg_black_loss = sum(black_wp_losses) / len(black_wp_losses) if black_wp_losses else 0
+    
+    def calc_acc(losses):
+        if not losses: return 0.0
+        avg_loss = sum(losses) / len(losses)
+        return round(100 * math.exp(-k * avg_loss), 1)
 
-    white_accuracy = 100 * math.exp(-k * avg_white_loss)
-    black_accuracy = 100 * math.exp(-k * avg_black_loss)
-
-    stats["white"]["accuracy"] = round(white_accuracy, 1)
-    stats["black"]["accuracy"] = round(black_accuracy, 1)
+    stats["white"]["accuracy"] = calc_acc(wp_losses["white"]["all"])
+    stats["black"]["accuracy"] = calc_acc(wp_losses["black"]["all"])
+    
+    for phase in ["opening", "middlegame", "endgame"]:
+        stats["white"]["accuracy_by_phase"][phase] = calc_acc(wp_losses["white"][phase])
+        stats["black"]["accuracy_by_phase"][phase] = calc_acc(wp_losses["black"][phase])
 
     return moves_data, stats

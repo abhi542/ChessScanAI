@@ -566,16 +566,19 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
     
     # Check cache
     cached = await database.get_cached_insight(user_id, game_ids)
-    if cached:
-        return {"insight": cached["insight_text"]}
+    if cached and "insight_json" in cached:
+        return cached["insight_json"]
         
     # Generate new insight
-    insight_text = await insights_service.generate_pattern_insights(user_id, games)
+    insight_json = await insights_service.generate_pattern_insights(user_id, games)
+    
+    if "error" in insight_json:
+        return insight_json
     
     # Cache it
-    await database.save_insight(user_id, game_ids, insight_text)
+    await database.save_insight(user_id, game_ids, insight_json)
     
-    return {"insight": insight_text}
+    return insight_json
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
