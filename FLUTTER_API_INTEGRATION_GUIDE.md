@@ -73,6 +73,7 @@ This document is the **single source of truth** for integrating the Flutter mobi
 *   **`POST /api/games`**: Send validated game JSON. **Backend automatically attaches `user_id` from JWT**. Returns `{ "status": "success", "game_id": "..." }`.
 *   **`GET /api/games?page=1&limit=20`**: Returns paginated games list `{"items": [...], "total": 0, "page": 1, "has_next": false}`.
 *   **`DELETE /api/games/{game_id}`**: Deletes game from DB (Validates JWT ownership).
+*   **`DELETE /api/users/me?keep_games=true|false`**: Deletes the user account. If `keep_games` is `true`, their games are anonymously donated.
 
 ### Dual-Architecture Review Pipeline
 **Mobile First (Cost-Saving Flow):**

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account - Kibitzz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col items-center justify-center">
+
+    <div class="max-w-xl w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl text-center flex flex-col">
+        <div class="p-8 border-b border-gray-700">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
+                Kibitzz
+            </h1>
+            <p class="text-sm text-gray-400 mb-6">Developed by Atimis</p>
+
+            <h2 class="text-2xl font-semibold text-red-500 mb-2">Delete Account</h2>
+            <p class="text-sm text-gray-300">We're sorry to see you go! What would you like to do with your saved games?</p>
+        </div>
+
+        <div id="unauthenticatedView" class="p-8 bg-gray-900 rounded-b-lg hidden flex-col gap-4 items-center">
+            <p class="text-gray-400 text-sm mb-4">You must be logged in to delete your account.</p>
+            <a href="/" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded transition-colors shadow-lg">
+                Go to Web Dashboard to Login
+            </a>
+        </div>
+
+        <div id="authenticatedView" class="p-6 bg-gray-900 rounded-b-lg hidden flex-col gap-4">
+            <button onclick="handleDeleteAccount(true)" class="bg-green-700 hover:bg-green-600 text-white px-4 py-4 rounded-lg font-semibold text-left transition shadow flex items-center justify-between group">
+                <div>
+                    <div class="text-lg">Donate Games & Delete Account</div>
+                    <div class="text-sm text-green-300 font-normal mt-1">Your profile is deleted immediately, but your games are kept anonymously to help train our AI.</div>
+                </div>
+                <span class="text-2xl group-hover:scale-110 transition-transform">🙌</span>
+            </button>
+
+            <button onclick="handleDeleteAccount(false)" class="bg-red-900 hover:bg-red-800 border border-red-700 text-white px-4 py-4 rounded-lg font-semibold text-left transition shadow flex items-center justify-between group">
+                <div>
+                    <div class="text-lg text-red-200">Delete Everything</div>
+                    <div class="text-sm text-red-400 font-normal mt-1">Your profile, stats, and all your games are permanently wiped.</div>
+                </div>
+                <span class="text-2xl group-hover:scale-110 transition-transform">🗑️</span>
+            </button>
+
+            <a href="/" class="mt-4 text-sm text-gray-400 hover:text-white underline">Cancel and return to dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem("chess_token");
+        
+        if (token) {
+            document.getElementById("authenticatedView").classList.remove("hidden");
+            document.getElementById("authenticatedView").classList.add("flex");
+        } else {
+            document.getElementById("unauthenticatedView").classList.remove("hidden");
+            document.getElementById("unauthenticatedView").classList.add("flex");
+        }
+
+        async function handleDeleteAccount(keepGames) {
+            if (!token) return;
+
+            if (!confirm(keepGames ? "Are you sure you want to delete your account and donate your games?" : "Are you sure you want to permanently delete EVERYTHING? This cannot be undone.")) {
+                return;
+            }
+
+            try {
+                // Determine API base URL dynamically (handles localhost and production)
+                const apiBase = window.location.origin;
+                
+                const res = await fetch(`${apiBase}/api/users/me?keep_games=${keepGames}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Failed to delete account");
+                }
+                
+                // Clear local storage completely
+                localStorage.removeItem("chess_token");
+                localStorage.removeItem("chess_profile");
+                
+                alert(keepGames 
+                    ? "Your account has been deleted, but your games were safely donated to help improve our AI. Thank you!" 
+                    : "Your account and all your data have been permanently deleted.");
+                
+                // Redirect home
+                window.location.href = "/";
+                    
+            } catch (e) {
+                console.error("Delete account error:", e);
+                alert("Error deleting account: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
