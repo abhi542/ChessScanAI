@@ -70,7 +70,7 @@ def read_root(request: Request):
 # ── API Endpoints ────────────────────────────────────────────────────────────
 
 @app.get("/health")
-def health_check():
+async def health_check():
     """Health check endpoint to verify service status."""
     return {"status": "healthy", "model": config.PRIMARY_MODEL}
 
@@ -96,7 +96,8 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Depends(requ
     temp_dir = Path("temp_uploads")
     temp_dir.mkdir(exist_ok=True)
     
-    file_path = temp_dir / file.filename
+    import uuid
+    file_path = temp_dir / f"{uuid.uuid4()}_{file.filename}"
     try:
         # Save temp file
         with open(file_path, "wb") as buffer:
@@ -104,8 +105,9 @@ async def upload_image(file: UploadFile = File(...), user_id: str = Depends(requ
             
         print(f"[INFO] Processing image: {file_path}")
         
-        # Call Service
-        raw_moves = services.extract_moves(str(file_path))
+        # Call Service using threadpool to prevent blocking the async event loop
+        from starlette.concurrency import run_in_threadpool
+        raw_moves = await run_in_threadpool(services.extract_moves, str(file_path))
         
         # Increment metric
         await database.increment_usage_metric(user_id, "ocr_count")
@@ -151,8 +153,9 @@ async def validate_game(request: ValidationRequest):
     
     pgn_string = None
     if is_valid:
+        import uuid
         # Generate PGN (using a temp file as required by current build_pgn interface)
-        output_path = config.OUTPUT_DIR / "temp_web_export.pgn"
+        output_path = config.OUTPUT_DIR / f"{uuid.uuid4()}.pgn"
         pgn_string = services.build_pgn(
             annotated_moves, 
             board, 
@@ -165,6 +168,10 @@ async def validate_game(request: ValidationRequest):
             round_str=request.round,
             result_str=request.result
         )
+        # Cleanup temp file
+        if output_path.exists():
+            import os
+            os.remove(output_path)
         # We can return the string directly, `build_pgn` returns it too.
 
     return {
@@ -184,7 +191,8 @@ async def upload_pgn_file(file: UploadFile = File(...)):
     """
     temp_dir = Path("temp_uploads")
     temp_dir.mkdir(exist_ok=True)
-    file_path = temp_dir / file.filename
+    import uuid
+    file_path = temp_dir / f"{uuid.uuid4()}_{file.filename}"
 
     try:
         # Save temp file
@@ -443,7 +451,8 @@ async def generate_game_review(req: ReviewRequest, user_id: str = Depends(requir
                 return analysis["analysis_json"]
 
         # Cache miss or stale -> Regenerate
-        review_data = review_service.process_game_review(game["pgn"])
+        from starlette.concurrency import run_in_threadpool
+        review_data = await run_in_threadpool(review_service.process_game_review, game["pgn"])
         
         analysis_doc = {
             "game_id": req.game_id,
@@ -499,7 +508,8 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
             
             if not is_analysis_valid:
                 # Generate Analysis Backend-side
-                review_data = review_service.process_game_review(game["pgn"])
+                from starlette.concurrency import run_in_threadpool
+                review_data = await run_in_threadpool(review_service.process_game_review, game["pgn"])
                 analysis_doc = {
                     "game_id": req.game_id,
                     "user_id": user_id,
@@ -516,7 +526,8 @@ async def generate_game_review_summary_only(req: ReviewSummaryRequest, user_id: 
             llm_payload = analysis_json.get("llm_payload", {})
         
         # Generate Review
-        summary_text = review_service.generate_review_summary(llm_payload)
+        from starlette.concurrency import run_in_threadpool
+        summary_text = await run_in_threadpool(review_service.generate_review_summary, llm_payload)
         
         review_doc = {
             "game_id": req.game_id,
@@ -583,4 +594,4 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
