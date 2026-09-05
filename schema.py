@@ -29,7 +29,7 @@ class ValidationRequest(BaseModel):
     game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: Optional[str] = None
     round: str = "?"
-    result: str = "*"
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"] = "*"
 
 # Response models are typically implicit dicts in FastAPI but defining them is good practice
 class ValidationResponse(BaseModel):
@@ -57,7 +57,7 @@ class GameCreateRequest(BaseModel):
     game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: str
     round: str
-    result: str = "*"
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"] = "*"
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
@@ -72,7 +72,7 @@ class SavedGame(BaseModel):
     game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: str
     round: str
-    result: str = "*"
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"] = "*"
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
