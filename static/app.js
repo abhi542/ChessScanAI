@@ -49,7 +49,7 @@ $(document).ready(() => {
     $('#btnFlip').on('click', () => board.flip());
 
     // Trigger validation when metadata changes
-    $('#whitePlayer, #blackPlayer, #eventName, #siteName, #gameDate, #roundNum, #gameResult').on('change', validateMoves);
+    $('#whitePlayer, #blackPlayer, #tournamentSelect, #gameFormat, #gameDate, #roundNum, #gameResult').on('change', validateMoves);
 
     // Init Auth UI
     updateAuthUI();
@@ -149,8 +149,8 @@ async function validateMoves() {
         moves: movesToSend,
         white_player: $('#whitePlayer').val(),
         black_player: $('#blackPlayer').val(),
-        event: $('#eventName').val(),
-        site: $('#siteName').val(),
+        tournament_id: $('#tournamentSelect').val() || null,
+        game_format: $('#gameFormat').val() || "Standard",
         date: $('#gameDate').val() ? $('#gameDate').val().replace(/-/g, '.') : "",
         round: $('#roundNum').val(),
         result: $('#gameResult').val()
@@ -403,8 +403,16 @@ async function handlePgnUpload(e) {
         // Update Metadata
         $('#whitePlayer').val(data.white_player || "?");
         $('#blackPlayer').val(data.black_player || "?");
-        $('#eventName').val(data.event || "?");
-        $('#siteName').val(data.site || "?");
+        // We do not have a tournament_id from PGN, just game_format from Site
+        $('#tournamentSelect').val("");
+        
+        let format = data.game_format || "?";
+        if (["Standard", "Rapid", "Blitz"].includes(format)) {
+            $('#gameFormat').val(format);
+        } else {
+            $('#gameFormat').val("?");
+        }
+
         $('#gameDate').val(data.date ? data.date.replace(/\./g, '-') : "");
         $('#roundNum').val(data.round || "?");
         $('#gameResult').val(data.result || "*");
@@ -572,6 +580,8 @@ function handleLogout() {
     localStorage.removeItem("chess_token");
     localStorage.removeItem("chess_profile");
     updateAuthUI();
+    $('#tournamentSelect').html('<option value="">None</option>');
+    $('#gamesModalTournamentFilter').html('<option value="">All Tournaments</option>');
 }
 
 
@@ -609,6 +619,7 @@ function updateAuthUI() {
         $('#loadGameBtn').removeClass('hidden');
         $('#insightsBtn').removeClass('hidden');
         if (gameState.isValid) $('#saveGameBtn').prop('disabled', false);
+        fetchTournaments(); // Load tournaments on UI update
     } else {
         $('#googleBtnWrapper').removeClass('hidden');
         $('#userInfo').addClass('hidden');
@@ -625,8 +636,8 @@ async function saveGame() {
         user_email: userProfile.email,
         white_player: $('#whitePlayer').val() || "?",
         black_player: $('#blackPlayer').val() || "?",
-        event: $('#eventName').val() || "?",
-        site: $('#siteName').val() || "?",
+        tournament_id: $('#tournamentSelect').val() || null,
+        game_format: $('#gameFormat').val() || "Standard",
         date: $('#gameDate').val() ? $('#gameDate').val().replace(/-/g, '.') : "",
         round: $('#roundNum').val() || "?",
         result: $('#gameResult').val() || "*",
@@ -664,7 +675,11 @@ async function fetchUserGames() {
     $('#gamesListContent').html('<div class="text-center text-gray-400 py-4">Loading...</div>');
 
     try {
-        const res = await fetch(`${API_BASE}/api/games`, {
+        let url = `${API_BASE}/api/games`;
+        const tId = $('#gamesModalTournamentFilter').val();
+        if (tId) url += `?tournament_id=${encodeURIComponent(tId)}`;
+
+        const res = await fetch(url, {
             headers: { 'Authorization': `Bearer ${userToken}` }
         });
         if (!res.ok) throw new Error("Failed to fetch games");
@@ -714,8 +729,15 @@ function loadGameFromObj(gameIndex) {
     // Update Metadata UI
     $('#whitePlayer').val(data.white_player || "?");
     $('#blackPlayer').val(data.black_player || "?");
-    $('#eventName').val(data.event || "?");
-    $('#siteName').val(data.site || "?");
+    $('#tournamentSelect').val(data.tournament_id || "");
+    
+    let format = data.game_format || "?";
+    if (["Standard", "Rapid", "Blitz"].includes(format)) {
+        $('#gameFormat').val(format);
+    } else {
+        $('#gameFormat').val("?");
+    }
+
     $('#gameDate').val(data.date ? data.date.replace(/\./g, '-') : "");
     $('#roundNum').val(data.round || "?");
     $('#gameResult').val(data.result || "*");
@@ -1351,5 +1373,71 @@ async function fetchInsights() {
         $('#insightsLoading').addClass('hidden');
         $('#coachChatContent').html(`<div class="text-red-400 text-center py-4">Error: ${e.message}</div>`).removeClass('hidden');
         switchInsightTab('coachChat');
+    }
+}
+
+// -- Tournaments --
+
+async function fetchTournaments() {
+    if (!userToken) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/tournaments`, {
+            headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        if (!res.ok) throw new Error("Failed to load tournaments");
+        
+        const tournaments = await res.json();
+        
+        let options = '<option value="">None</option>';
+        let filterOptions = '<option value="">All Tournaments</option>';
+        
+        tournaments.forEach(t => {
+            options += `<option value="${t.id}">${t.name}</option>`;
+            filterOptions += `<option value="${t.id}">${t.name}</option>`;
+        });
+        
+        const currentSelected = $('#tournamentSelect').val();
+        
+        $('#tournamentSelect').html(options);
+        $('#gamesModalTournamentFilter').html(filterOptions);
+        
+        if (currentSelected) {
+            $('#tournamentSelect').val(currentSelected);
+        }
+    } catch (e) {
+        console.error("Error fetching tournaments:", e);
+    }
+}
+
+async function createNewTournament() {
+    if (!userToken) {
+        alert("Please log in first.");
+        return;
+    }
+    
+    const name = prompt("Enter a name for the new tournament directory:");
+    if (!name || name.trim() === "") return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/tournaments`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`
+            },
+            body: JSON.stringify({ name: name.trim() })
+        });
+        
+        if (!res.ok) throw new Error("Failed to create tournament");
+        const newTournament = await res.json();
+        
+        await fetchTournaments();
+        
+        // Select the newly created tournament automatically
+        $('#tournamentSelect').val(newTournament.id);
+        validateMoves(); // trigger validation since metadata changed
+        
+    } catch (e) {
+        alert("Error creating tournament: " + e.message);
     }
 }

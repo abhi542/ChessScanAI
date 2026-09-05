@@ -104,14 +104,22 @@
                         class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="flex flex-col">
-                    <label class="text-xs text-gray-400">Event</label>
-                    <input type="text" id="eventName" value="Chess OCR"
-                        class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
+                    <label class="text-xs text-gray-400">Tournament</label>
+                    <div class="flex gap-1">
+                        <select id="tournamentSelect" class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 flex-1 focus:outline-none focus:border-blue-500 text-xs">
+                            <option value="">None</option>
+                        </select>
+                        <button onclick="createNewTournament()" class="bg-blue-600 hover:bg-blue-500 px-2 rounded text-white font-bold">+</button>
+                    </div>
                 </div>
                 <div class="flex flex-col">
-                    <label class="text-xs text-gray-400">Site</label>
-                    <input type="text" id="siteName" value="?"
-                        class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
+                    <label class="text-xs text-gray-400">Game Format</label>
+                    <select id="gameFormat" class="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500">
+                        <option value="Standard">Standard</option>
+                        <option value="Rapid">Rapid</option>
+                        <option value="Blitz">Blitz</option>
+                        <option value="?">Unknown</option>
+                    </select>
                 </div>
                 <div class="flex flex-col">
                     <label class="text-xs text-gray-400">Date</label>
@@ -241,7 +249,12 @@
         <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 w-[600px] flex flex-col max-h-[80vh]">
             <div class="flex justify-between items-center p-4 border-b border-gray-700">
                 <h3 class="text-lg font-bold text-gray-100">My Saved Games</h3>
-                <button onclick="$('#gamesModal').addClass('hidden')" class="text-gray-400 hover:text-white">✕</button>
+                <div class="flex gap-2 items-center">
+                    <select id="gamesModalTournamentFilter" onchange="fetchUserGames(1)" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200">
+                        <option value="">All Tournaments</option>
+                    </select>
+                    <button onclick="$('#gamesModal').addClass('hidden')" class="text-gray-400 hover:text-white ml-2">✕</button>
+                </div>
             </div>
             <div class="p-4 overflow-y-auto" id="gamesListContent">
                 <div class="text-center text-gray-400 py-4">Loading...</div>

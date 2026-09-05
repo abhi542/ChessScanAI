@@ -1,5 +1,5 @@
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 # --- Core Domain Models ---
@@ -23,11 +23,11 @@ class ValidationRequest(BaseModel):
     moves: List[MoveRequest]
     white_player: str = "?"
     black_player: str = "?"
-    event: str = "Chess OCR"
-    site: str = "?"
+    tournament_id: Optional[str] = None
+    game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: Optional[str] = None
     round: str = "?"
-    result: str = "*"
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"] = "*"
 
 # Response models are typically implicit dicts in FastAPI but defining them is good practice
 class ValidationResponse(BaseModel):
@@ -49,11 +49,11 @@ class User(BaseModel):
 class GameCreateRequest(BaseModel):
     white_player: str
     black_player: str
-    event: str
-    site: str
+    tournament_id: Optional[str] = None
+    game_format: Literal["Standard", "Rapid", "Blitz"]
     date: str
     round: str
-    result: str
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"]
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
@@ -62,11 +62,11 @@ class SavedGame(BaseModel):
     user_id: str
     white_player: str
     black_player: str
-    event: str
-    site: str
+    tournament_id: Optional[str] = None
+    game_format: Literal["Standard", "Rapid", "Blitz"]
     date: str
     round: str
-    result: str
+    result: Literal["1-0", "0-1", "1/2-1/2", "*"]
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
@@ -97,8 +97,17 @@ class UsageMetricsModel(BaseModel):
     ocr_count: int = 0
     analysis_count: int = 0
     review_count: int = 0
+    insights_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class TournamentCreateRequest(BaseModel):
+    name: str
+
+class TournamentResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
 
 class InsightModel(BaseModel):
     user_id: str

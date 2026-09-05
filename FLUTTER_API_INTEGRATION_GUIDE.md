@@ -70,8 +70,10 @@ This document is the **single source of truth** for integrating the Flutter mobi
 ### Core Flow
 *   **`POST /api/upload`**: Upload multipart image file. Returns raw extracted moves. (Requires Auth for tracking usage metrics).
 *   **`POST /api/validate`**: Send raw moves + metadata. Returns fully validated moves and PGN string.
-*   **`POST /api/games`**: Send validated game JSON. **Backend automatically attaches `user_id` from JWT**. Returns `{ "status": "success", "game_id": "..." }`.
-*   **`GET /api/games?page=1&limit=20`**: Returns paginated games list `{"items": [...], "total": 0, "page": 1, "has_next": false}`.
+*   **`POST /api/tournaments`**: Send `{ "name": "Tournament Name" }`. Returns `{ "id": "...", "name": "...", "created_at": "..." }`.
+*   **`GET /api/tournaments`**: Returns list of tournaments `[{"id": "...", "name": "...", "created_at": "..."}, ...]`.
+*   **`POST /api/games`**: Send validated game JSON. **Backend automatically attaches `user_id` from JWT**. Returns `{ "status": "success", "game_id": "..." }`. Ensure payload uses `tournament_id` and `game_format` instead of `event`/`site`.
+*   **`GET /api/games?page=1&limit=20&tournament_id=xxx`**: Returns paginated games list `{"items": [...], "total": 0, "page": 1, "has_next": false}`. (Optional tournament filter).
 *   **`DELETE /api/games/{game_id}`**: Deletes game from DB (Validates JWT ownership).
 *   **`DELETE /api/users/me?keep_games=true|false`**: Deletes the user account. If `keep_games` is `true`, their games are anonymously donated.
 
@@ -141,11 +143,12 @@ Here is exactly how the data looks in the MongoDB Atlas Cluster.
 ```json
 {
   "_id": { "$oid": "6a22ca7c9f29399f056d4617" },
-  "date": "2026-06-05",
+  "month": "2026-06",
   "user_id": "6a22c958fa1d102437df28d6",
   "ocr_count": 1,
   "analysis_count": 4,
-  "review_count": 4
+  "review_count": 4,
+  "insights_count": 2
 }
 ```
 
@@ -154,8 +157,8 @@ Here is exactly how the data looks in the MongoDB Atlas Cluster.
 {
   "white_player": "game 2 w",
   "black_player": "game 2 b",
-  "event": "Game 2",
-  "site": "offline",
+  "tournament_id": "6a22cb77c514a24987e78b11",
+  "game_format": "Standard",
   "date": "2026.06.05",
   "round": "1",
   "result": "1-0",
@@ -209,11 +212,11 @@ Here is exactly how the data looks in the MongoDB Atlas Cluster.
 
 ## 5. Rate Limiting & Paywalls (Crucial)
 
-The backend now enforces strict daily limits based on user subscription tiers (`free` vs `premium`). 
+The backend now enforces strict limits based on user subscription tiers (`free` vs `premium`). 
 
 **Limits:**
-- **Free Tier:** 5 OCR Scans & 5 Game Reviews per day.
-- **Premium Tier:** 10 OCR Scans & 10 Game Reviews per day.
+- **Free Tier:** 50 OCR Scans, 3 Game Reviews, 2 Deep Insights per month.
+- **Premium Tier:** Unlimited.
 
 ### How to handle the limits in Flutter:
 Both `POST /api/upload` and `POST /api/review-summary` will intercept the request *before* any compute is run if the user is out of credits.
@@ -223,7 +226,7 @@ When a limit is reached, the API will return a **`403 Forbidden`** status code w
 {
   "detail": {
     "error": "LIMIT_REACHED",
-    "feature": "ocr" // Will be "ocr" or "review"
+    "feature": "ocr" // Will be "ocr", "review", or "insights"
   }
 }
 ```

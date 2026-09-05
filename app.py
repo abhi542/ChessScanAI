@@ -154,6 +154,12 @@ async def validate_game(request: ValidationRequest):
     pgn_string = None
     if is_valid:
         import uuid
+        tournament_name = "Chess OCR"
+        if request.tournament_id:
+            t = await database.get_tournament_by_id(request.tournament_id)
+            if t:
+                tournament_name = t["name"]
+
         # Generate PGN (using a temp file as required by current build_pgn interface)
         output_path = config.OUTPUT_DIR / f"{uuid.uuid4()}.pgn"
         pgn_string = services.build_pgn(
@@ -162,8 +168,8 @@ async def validate_game(request: ValidationRequest):
             str(output_path), 
             white=request.white_player, 
             black=request.black_player, 
-            event=request.event,
-            site=request.site,
+            tournament_name=tournament_name,
+            game_format=request.game_format,
             date_str=request.date,
             round_str=request.round,
             result_str=request.result
@@ -211,8 +217,8 @@ async def upload_pgn_file(file: UploadFile = File(...)):
         metadata = {
             "white_player": headers.get("White", "?"),
             "black_player": headers.get("Black", "?"),
-            "event": headers.get("Event", "?"),
-            "site": headers.get("Site", "?"),
+            "tournament_id": None, # PGN files won't map perfectly to DB ids by default
+            "game_format": headers.get("Site", "?"),
             "date": headers.get("Date", ""),
             "round": headers.get("Round", "?"),
             "result": headers.get("Result", "*"),
@@ -349,6 +355,25 @@ async def refresh_token(req: RefreshRequest):
     access_token = auth.create_access_token(data={"sub": user_id})
     return {"access_token": access_token, "token_type": "bearer"}
 
+from schema import TournamentCreateRequest, TournamentResponse
+
+@app.post("/api/tournaments", response_model=TournamentResponse)
+async def create_tournament(req: TournamentCreateRequest, user_id: str = Depends(require_accepted_terms)):
+    """
+    Create a new tournament folder.
+    """
+    doc = await database.create_tournament(user_id, req.name)
+    if not doc:
+        raise HTTPException(status_code=500, detail="Failed to create tournament")
+    return TournamentResponse(id=doc["_id"], name=doc["name"], created_at=doc["created_at"])
+
+@app.get("/api/tournaments", response_model=list[TournamentResponse])
+async def get_tournaments(user_id: str = Depends(require_accepted_terms)):
+    """
+    Get all tournament folders for the user.
+    """
+    docs = await database.get_tournaments(user_id)
+    return [TournamentResponse(id=doc["_id"], name=doc["name"], created_at=doc["created_at"]) for doc in docs]
 
 @app.post("/api/games")
 async def save_user_game(game: GameCreateRequest, user_id: str = Depends(require_accepted_terms)):
@@ -365,11 +390,11 @@ async def save_user_game(game: GameCreateRequest, user_id: str = Depends(require
 
 
 @app.get("/api/games")
-async def get_user_games(page: int = 1, limit: int = 20, user_id: str = Depends(require_accepted_terms)):
+async def get_user_games(page: int = 1, limit: int = 20, tournament_id: Optional[str] = None, user_id: str = Depends(require_accepted_terms)):
     """
     List all games saved by the current user.
     """
-    games, total = await database.list_user_games(user_id, page, limit)
+    games, total = await database.list_user_games(user_id, page, limit, tournament_id)
     return {
         "items": games,
         "total": total,
@@ -575,6 +600,11 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
         
     game_ids = [str(g["_id"]) for g in games]
     
+    # Check limit
+    allowed = await database.check_usage_limit(user_id, "insights")
+    if not allowed:
+        raise HTTPException(status_code=403, detail={"error": "LIMIT_REACHED", "feature": "insights"})
+
     # Check cache
     cached = await database.get_cached_insight(user_id, game_ids)
     if cached and "insight_json" in cached:
@@ -589,6 +619,9 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
     # Cache it
     await database.save_insight(user_id, game_ids, insight_json)
     
+    # Increment usage limit metric
+    await database.increment_usage_metric(user_id, "insights_count")
+
     return insight_json
 
 if __name__ == "__main__":
