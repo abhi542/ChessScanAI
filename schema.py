@@ -23,11 +23,13 @@ class ValidationRequest(BaseModel):
     moves: List[MoveRequest]
     white_player: str = "?"
     black_player: str = "?"
+    event: Optional[str] = "?"
+    site: Optional[str] = "?"
     tournament_id: Optional[str] = None
     game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: Optional[str] = None
     round: str = "?"
-    result: Literal["1-0", "0-1", "1/2-1/2", "*"] = "*"
+    result: str = "*"
 
 # Response models are typically implicit dicts in FastAPI but defining them is good practice
 class ValidationResponse(BaseModel):
@@ -49,11 +51,13 @@ class User(BaseModel):
 class GameCreateRequest(BaseModel):
     white_player: str
     black_player: str
+    event: Optional[str] = "?"
+    site: Optional[str] = "?"
     tournament_id: Optional[str] = None
-    game_format: Literal["Standard", "Rapid", "Blitz"]
+    game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: str
     round: str
-    result: Literal["1-0", "0-1", "1/2-1/2", "*"]
+    result: str = "*"
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
@@ -62,11 +66,13 @@ class SavedGame(BaseModel):
     user_id: str
     white_player: str
     black_player: str
+    event: Optional[str] = "?"
+    site: Optional[str] = "?"
     tournament_id: Optional[str] = None
-    game_format: Literal["Standard", "Rapid", "Blitz"]
+    game_format: Literal["Standard", "Rapid", "Blitz", "?"] = "?"
     date: str
     round: str
-    result: Literal["1-0", "0-1", "1/2-1/2", "*"]
+    result: str = "*"
     pgn: str
     annotated_moves: list[dict]
     its_me: Optional[str] = None
