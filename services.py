@@ -128,8 +128,8 @@ def build_pgn(
     output_path: str, # Keeping arg for compatibility but logic below handles writing
     white: str = "?",
     black: str = "?",
-    event: str = "Chess Scoresheet OCR",
-    site: str = "?",
+    tournament_name: str = "Chess OCR",
+    game_format: str = "?",
     date_str: str = None,
     round_str: str = "?",
     result_str: str = "*"
@@ -141,8 +141,8 @@ def build_pgn(
     game = chess.pgn.Game()
 
     # ── Headers ──
-    game.headers["Event"] = event
-    game.headers["Site"] = site
+    game.headers["Event"] = tournament_name
+    game.headers["Site"] = game_format
     game.headers["Date"] = date_str if date_str else date.today().strftime("%Y.%m.%d")
     game.headers["Round"] = round_str
     game.headers["White"] = white

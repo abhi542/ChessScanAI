@@ -49,5 +49,5 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 
 # Usage Limits (Per User Per Day)
-FREE_TIER_LIMITS = {"ocr": 50, "review": 50}
-PRO_TIER_LIMITS = {"ocr": 500, "review": 500}
+FREE_TIER_LIMITS = {"ocr": 50, "review": 3, "insights": 2}
+PRO_TIER_LIMITS = {"ocr": 500, "review": 500, "insights": 500}

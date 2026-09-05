@@ -18,7 +18,8 @@ async def connect_db():
                 await db_state.db.games.create_index([("user_id", pymongo.ASCENDING), ("created_at", pymongo.DESCENDING)])
                 await db_state.db.analysis.create_index("game_id", unique=True)
                 await db_state.db.reviews.create_index("game_id", unique=True)
-                await db_state.db.usage_metrics.create_index([("user_id", pymongo.ASCENDING), ("date", pymongo.DESCENDING)])
+                await db_state.db.usage_metrics.create_index([("user_id", pymongo.ASCENDING), ("month", pymongo.DESCENDING)])
+                await db_state.db.tournaments.create_index("user_id")
                 print("[INFO] Connected to MongoDB and ensured indexes.")
             except Exception as e:
                 print(f"[ERROR] Failed to connect to MongoDB: {e}")
@@ -97,12 +98,17 @@ async def save_game(game_data: dict):
     game_data["_id"] = result.inserted_id
     return str(result.inserted_id)
 
-async def list_user_games(user_id: str, page: int = 1, limit: int = 20):
+async def list_user_games(user_id: str, page: int = 1, limit: int = 20, tournament_id: str = None):
     db = get_db()
     if db is None: return [], 0
     skip = (page - 1) * limit
-    cursor = db.games.find({"user_id": user_id}).sort("created_at", -1).skip(skip).limit(limit)
-    total = await db.games.count_documents({"user_id": user_id})
+    
+    query = {"user_id": user_id}
+    if tournament_id:
+        query["tournament_id"] = tournament_id
+        
+    cursor = db.games.find(query).sort("created_at", -1).skip(skip).limit(limit)
+    total = await db.games.count_documents(query)
     games = await cursor.to_list(length=limit)
     for g in games:
         g["_id"] = str(g["_id"])
@@ -139,6 +145,42 @@ async def get_game_by_id(game_id: str):
         if game:
             game["_id"] = str(game["_id"])
         return game
+    except Exception:
+        return None
+
+async def create_tournament(user_id: str, name: str):
+    from datetime import datetime
+    db = get_db()
+    if db is None: return None
+    now = datetime.utcnow()
+    doc = {
+        "user_id": user_id,
+        "name": name,
+        "created_at": now,
+        "updated_at": now
+    }
+    result = await db.tournaments.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    return doc
+
+async def get_tournaments(user_id: str):
+    db = get_db()
+    if db is None: return []
+    cursor = db.tournaments.find({"user_id": user_id}).sort("created_at", -1)
+    tournaments = await cursor.to_list(length=100)
+    for t in tournaments:
+        t["_id"] = str(t["_id"])
+    return tournaments
+
+async def get_tournament_by_id(tournament_id: str):
+    from bson.objectid import ObjectId
+    db = get_db()
+    if db is None: return None
+    try:
+        t = await db.tournaments.find_one({"_id": ObjectId(tournament_id)})
+        if t:
+            t["_id"] = str(t["_id"])
+        return t
     except Exception:
         return None
 
@@ -227,17 +269,17 @@ async def increment_usage_metric(user_id: str, metric_field: str):
     from datetime import datetime
     db = get_db()
     if db is None: return
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    current_month = datetime.utcnow().strftime("%Y-%m")
     await db.usage_metrics.update_one(
-        {"user_id": user_id, "date": today},
+        {"user_id": user_id, "month": current_month},
         {"$inc": {metric_field: 1}},
         upsert=True
     )
 
 async def check_usage_limit(user_id: str, feature: str) -> bool:
     """
-    Checks if the user has hit their daily limit for a specific feature.
-    feature should be "ocr" or "review".
+    Checks if the user has hit their monthly limit for a specific feature.
+    feature should be "ocr", "review", or "insights".
     Returns True if allowed, False if limit reached.
     """
     from datetime import datetime
@@ -254,9 +296,9 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
     limits = config.PRO_TIER_LIMITS if plan == "premium" else config.FREE_TIER_LIMITS
     max_allowed = limits.get(feature, 5)
     
-    # Get today's usage
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    metrics = await db.usage_metrics.find_one({"user_id": user_id, "date": today})
+    # Get this month's usage
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    metrics = await db.usage_metrics.find_one({"user_id": user_id, "month": current_month})
     
     if not metrics:
         return True
