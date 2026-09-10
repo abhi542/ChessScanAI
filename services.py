@@ -82,7 +82,25 @@ def validate_moves(raw_moves: list[dict]) -> tuple[list[dict], chess.Board]:
 
             # Normalize common OCR glitches
             san = raw_san.strip().replace("`", "").replace(" ", "")
-            san = san.replace("0-0-0", "O-O-O").replace("0-0", "O-O")
+            
+            # Robust case normalization (e.g. NC7 -> Nc7, BXB5 -> Bxb5, e8=q -> e8=Q)
+            if "O-O" in san.upper() or "0-0" in san:
+                san = san.upper().replace("0", "O")
+            else:
+                normalized = ""
+                for i, char in enumerate(san):
+                    if i == 0:
+                        # Preserve first character case (differentiates 'b' pawn from 'B' bishop)
+                        normalized += char
+                    elif char == '=':
+                        normalized += char
+                    elif i > 0 and san[i-1] == '=':
+                        # Promotion piece must be uppercase
+                        normalized += char.upper()
+                    else:
+                        # Files, ranks, captures (x), checks (+) must be lowercase/symbols
+                        normalized += char.lower()
+                san = normalized
 
             current_fen = board.fen()
 

@@ -37,6 +37,9 @@ class ChessEngine:
             # The evaluation before this move was made
             eval_before = current_eval
             best_move_before = best_move
+            
+            # Get SAN for the best move before pushing the actual move
+            best_move_san = board.san(best_move_before) if best_move_before else None
 
             board.push(move)
             fen_after = board.fen()
@@ -75,7 +78,7 @@ class ChessEngine:
                 "player": "white" if player_is_white else "black",
                 "eval_before": eval_before,
                 "eval_after": eval_after,
-                "best_move": best_move_before.uci() if best_move_before else None,
+                "best_move": best_move_san,
                 "played_best": best_move_before == move if best_move_before else False,
                 "fen": fen_after,
                 "phase": phase
