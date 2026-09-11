@@ -43,10 +43,18 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = None
-    plan: str = "free"
+    plan: str = "free" # "free", "premium", "admin_dev"
+    role: Optional[str] = "user" # "user", "admin", "dev"
+    custom_limits: Optional[dict] = None # e.g. {"ocr": 100, "review": 50}
     terms_accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserLimitsUpdateRequest(BaseModel):
+    plan: Optional[str] = None
+    role: Optional[str] = None
+    custom_limits: Optional[dict] = None
+
 
 class GameCreateRequest(BaseModel):
     white_player: str
