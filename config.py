@@ -51,7 +51,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 # Admin / Dev Emails
 ADMIN_EMAILS = {"p97850454@gmail.com"}
 
-# Usage Limits (Per User Per Day)
+# Usage Limits (Per User Per Month)
 FREE_TIER_LIMITS = {"ocr": 30, "review": 30, "insights": 6}
 PRO_TIER_LIMITS = {"ocr": 60, "review": 60, "insights": 12}
 ADMIN_DEV_TIER_LIMITS = {"ocr": 100, "review": 100, "insights": 100}

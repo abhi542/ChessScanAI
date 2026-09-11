@@ -302,19 +302,18 @@ async def increment_usage_metric(user_id: str, metric_field: str):
     from datetime import datetime
     db = get_db()
     if db is None: return
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
     current_month = datetime.utcnow().strftime("%Y-%m")
     
-    # Increment both date (daily) and month (monthly history)
+    # Increment monthly usage metric
     await db.usage_metrics.update_one(
-        {"user_id": user_id, "date": current_date},
-        {"$inc": {metric_field: 1}, "$set": {"month": current_month}},
+        {"user_id": user_id, "month": current_month},
+        {"$inc": {metric_field: 1}},
         upsert=True
     )
 
 async def check_usage_limit(user_id: str, feature: str) -> bool:
     """
-    Checks if the user has hit their daily limit for a specific feature.
+    Checks if the user has hit their monthly limit for a specific feature.
     feature should be "ocr", "review", or "insights".
     Returns True if allowed, False if limit reached.
     """
@@ -330,9 +329,9 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
     limits, _ = get_effective_user_limits(user)
     max_allowed = limits.get(feature, 5)
     
-    # Get today's usage (daily reset)
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
-    metrics = await db.usage_metrics.find_one({"user_id": user_id, "date": current_date})
+    # Get this month's usage (monthly reset)
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    metrics = await db.usage_metrics.find_one({"user_id": user_id, "month": current_month})
     
     if not metrics:
         return True
@@ -344,7 +343,7 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
 
 async def get_user_usage_status(user_id: str) -> dict:
     """
-    Returns full daily usage status for all features for a user.
+    Returns full monthly usage status for all features for a user.
     """
     from datetime import datetime
     from bson.objectid import ObjectId
@@ -358,8 +357,8 @@ async def get_user_usage_status(user_id: str) -> dict:
         return {"error": "User not found"}
         
     limits, plan = get_effective_user_limits(user)
-    current_date = datetime.utcnow().strftime("%Y-%m-%d")
-    metrics = await db.usage_metrics.find_one({"user_id": user_id, "date": current_date}) or {}
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    metrics = await db.usage_metrics.find_one({"user_id": user_id, "month": current_month}) or {}
     
     features_status = {}
     for feat in ["ocr", "review", "insights"]:
@@ -378,7 +377,7 @@ async def get_user_usage_status(user_id: str) -> dict:
         "plan": plan,
         "role": user.get("role", "user"),
         "custom_limits": user.get("custom_limits"),
-        "date": current_date,
+        "month": current_month,
         "usage": features_status
     }
 

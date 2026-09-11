@@ -359,7 +359,7 @@ async def delete_my_account(keep_games: bool = False, user_id: str = Depends(req
 @app.get("/api/users/me/usage")
 async def get_my_usage_status(user_id: str = Depends(require_accepted_terms)):
     """
-    Get current user's daily usage status, maximum limits, and remaining quota.
+    Get current user's monthly usage status, maximum limits, and remaining quota.
     """
     return await database.get_user_usage_status(user_id)
 
