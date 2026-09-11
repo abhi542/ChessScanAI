@@ -13,7 +13,7 @@ import chess.pgn
 # Modular Imports
 import config
 import services
-from schema import ValidationRequest, ValidationResponse, User, SavedGame, GameCreateRequest
+from schema import ValidationRequest, ValidationResponse, User, SavedGame, GameCreateRequest, UserLimitsUpdateRequest
 import database
 import auth
 import httpx
@@ -300,10 +300,19 @@ async def google_auth(request: GoogleAuthRequest):
 
             # Check if user exists in our DB, if not create them
             user = await database.get_user_by_email(email)
+            is_admin = email in getattr(config, "ADMIN_EMAILS", set())
+            
             if not user:
-                user = await database.create_user({"email": email, "name": name, "picture": picture, "plan": "free"})
+                user = await database.create_user({
+                    "email": email, 
+                    "name": name, 
+                    "picture": picture, 
+                    "plan": "admin_dev" if is_admin else "free",
+                    "role": "admin" if is_admin else "user"
+                })
 
             user_id = str(user["_id"])
+            limits, plan = database.get_effective_user_limits(user)
 
             # Issue our own JWT
             access_token = auth.create_access_token(data={"sub": user_id})
@@ -317,6 +326,8 @@ async def google_auth(request: GoogleAuthRequest):
                     "email": email, 
                     "name": name, 
                     "picture": picture,
+                    "plan": plan,
+                    "role": user.get("role", "admin" if is_admin else "user"),
                     "terms_accepted": bool(user.get("terms_accepted_at"))
                 }
             }
@@ -344,6 +355,42 @@ async def delete_my_account(keep_games: bool = False, user_id: str = Depends(req
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete account")
     return {"status": "success", "message": "Account deleted successfully"}
+
+@app.get("/api/users/me/usage")
+async def get_my_usage_status(user_id: str = Depends(require_accepted_terms)):
+    """
+    Get current user's daily usage status, maximum limits, and remaining quota.
+    """
+    return await database.get_user_usage_status(user_id)
+
+@app.patch("/api/admin/users/{target_user_id}/limits")
+async def update_user_limits(
+    target_user_id: str,
+    req: UserLimitsUpdateRequest,
+    user_id: str = Depends(require_accepted_terms)
+):
+    """
+    Admin endpoint to update a target user's plan, role, or custom limits.
+    """
+    current_user = await database.get_user_by_id(user_id)
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    _, plan = database.get_effective_user_limits(current_user)
+    if plan != "admin_dev" and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+        
+    success = await database.update_user_limits_and_role(
+        user_id=target_user_id,
+        plan=req.plan,
+        role=req.role,
+        custom_limits=req.custom_limits
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to update user limits or user not found")
+        
+    return await database.get_user_usage_status(target_user_id)
+
 
 class RefreshRequest(BaseModel):
     refresh_token: str
@@ -589,7 +636,7 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    plan = user.get("plan", "free")
+    _, plan = database.get_effective_user_limits(user)
     if plan not in config.PATTERN_INSIGHTS_ENABLED_TIERS:
         raise HTTPException(status_code=403, detail="Pattern Insights are not enabled for your tier.")
         
