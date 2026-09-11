@@ -13,7 +13,7 @@ ANALYSIS_VERSION = "1.0"
 REVIEW_VERSION = "1.0"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"}
 OUTPUT_DIR = Path("output")
-PATTERN_INSIGHTS_ENABLED_TIERS = ["premium", "free"]
+PATTERN_INSIGHTS_ENABLED_TIERS = ["premium", "free", "admin_dev"]
 INSIGHTS_GAMES_COUNT = 5
 
 # Tracing
@@ -48,6 +48,11 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-productio
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 
-# Usage Limits (Per User Per Day)
-FREE_TIER_LIMITS = {"ocr": 30, "review": 30, "insights": 30}
-PRO_TIER_LIMITS = {"ocr": 500, "review": 500, "insights": 500}
+# Admin / Dev Emails
+ADMIN_EMAILS = {"p97850454@gmail.com"}
+
+# Usage Limits (Per User Per Month)
+FREE_TIER_LIMITS = {"ocr": 30, "review": 30, "insights": 6}
+PRO_TIER_LIMITS = {"ocr": 60, "review": 60, "insights": 12}
+ADMIN_DEV_TIER_LIMITS = {"ocr": 100, "review": 100, "insights": 100}
+

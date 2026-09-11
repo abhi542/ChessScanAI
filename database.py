@@ -19,6 +19,7 @@ async def connect_db():
                 await db_state.db.analysis.create_index("game_id", unique=True)
                 await db_state.db.reviews.create_index("game_id", unique=True)
                 await db_state.db.usage_metrics.create_index([("user_id", pymongo.ASCENDING), ("month", pymongo.DESCENDING)])
+                await db_state.db.usage_metrics.create_index([("user_id", pymongo.ASCENDING), ("date", pymongo.DESCENDING)])
                 await db_state.db.tournaments.create_index("user_id")
                 print("[INFO] Connected to MongoDB and ensured indexes.")
             except Exception as e:
@@ -265,11 +266,45 @@ async def save_insight(user_id: str, game_ids: list[str], insight_json: dict):
     )
     return insight_data
 
+def get_effective_user_limits(user: dict) -> tuple[dict, str]:
+    """
+    Returns (limits_dict, plan_name) based on priority:
+    1. Admin / Dev Email or Role/Plan -> ADMIN_DEV_TIER_LIMITS
+    2. Premium / Paid Plan -> PRO_TIER_LIMITS
+    3. Default Free Plan -> FREE_TIER_LIMITS
+    4. Custom per-user override (`custom_limits`) applied on top if present.
+    """
+    email = user.get("email", "")
+    plan = user.get("plan", "free")
+    role = user.get("role", "user")
+
+    # Determine base tier
+    if email in getattr(config, "ADMIN_EMAILS", set()) or plan in ["admin_dev", "admin"] or role in ["admin", "dev", "admin_dev"]:
+        effective_plan = "admin_dev"
+        base_limits = dict(getattr(config, "ADMIN_DEV_TIER_LIMITS", {"ocr": 100, "review": 100, "insights": 100}))
+    elif plan in ["premium", "paid", "pro"]:
+        effective_plan = "premium"
+        base_limits = dict(config.PRO_TIER_LIMITS)
+    else:
+        effective_plan = "free"
+        base_limits = dict(config.FREE_TIER_LIMITS)
+
+    # Custom per-user overrides take precedence if defined
+    custom_limits = user.get("custom_limits")
+    if isinstance(custom_limits, dict):
+        for k, v in custom_limits.items():
+            if isinstance(v, (int, float)):
+                base_limits[k] = int(v)
+
+    return base_limits, effective_plan
+
 async def increment_usage_metric(user_id: str, metric_field: str):
     from datetime import datetime
     db = get_db()
     if db is None: return
     current_month = datetime.utcnow().strftime("%Y-%m")
+    
+    # Increment monthly usage metric
     await db.usage_metrics.update_one(
         {"user_id": user_id, "month": current_month},
         {"$inc": {metric_field: 1}},
@@ -288,7 +323,6 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
     db = get_db()
     if db is None: return True # Fail open if DB is down
     
-    # Get user plan
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user: return False
     
@@ -300,11 +334,10 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
             # Bypass limits entirely for enterprise academy members
             return True
 
-    plan = user.get("plan", "free")
-    limits = config.PRO_TIER_LIMITS if plan == "premium" else config.FREE_TIER_LIMITS
+    limits, _ = get_effective_user_limits(user)
     max_allowed = limits.get(feature, 5)
     
-    # Get this month's usage
+    # Get this month's usage (monthly reset)
     current_month = datetime.utcnow().strftime("%Y-%m")
     metrics = await db.usage_metrics.find_one({"user_id": user_id, "month": current_month})
     
@@ -315,3 +348,64 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
     current_usage = metrics.get(metric_field, 0)
     
     return current_usage < max_allowed
+
+async def get_user_usage_status(user_id: str) -> dict:
+    """
+    Returns full monthly usage status for all features for a user.
+    """
+    from datetime import datetime
+    from bson.objectid import ObjectId
+    
+    db = get_db()
+    if db is None:
+        return {"error": "Database not connected"}
+        
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        return {"error": "User not found"}
+        
+    limits, plan = get_effective_user_limits(user)
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    metrics = await db.usage_metrics.find_one({"user_id": user_id, "month": current_month}) or {}
+    
+    features_status = {}
+    for feat in ["ocr", "review", "insights"]:
+        used = metrics.get(f"{feat}_count", 0)
+        max_limit = limits.get(feat, 0)
+        remaining = max(0, max_limit - used)
+        features_status[feat] = {
+            "used": used,
+            "max": max_limit,
+            "remaining": remaining
+        }
+        
+    return {
+        "user_id": user_id,
+        "email": user.get("email"),
+        "plan": plan,
+        "role": user.get("role", "user"),
+        "custom_limits": user.get("custom_limits"),
+        "month": current_month,
+        "usage": features_status
+    }
+
+async def update_user_limits_and_role(user_id: str, plan: str = None, role: str = None, custom_limits: dict = None) -> bool:
+    from bson.objectid import ObjectId
+    from datetime import datetime
+    db = get_db()
+    if db is None: return False
+    
+    update_doc = {"updated_at": datetime.utcnow()}
+    if plan is not None:
+        update_doc["plan"] = plan
+    if role is not None:
+        update_doc["role"] = role
+    if custom_limits is not None:
+        update_doc["custom_limits"] = custom_limits
+        
+    result = await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": update_doc}
+    )
+    return result.modified_count > 0 or result.matched_count > 0
+
