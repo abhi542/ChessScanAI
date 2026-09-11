@@ -624,6 +624,125 @@ async def get_pattern_insights(user_id: str = Depends(require_accepted_terms)):
 
     return insight_json
 
+# ── Enterprise / Coach Endpoints ─────────────────────────────────────────────
+
+from schema import AcademyCreateRequest, AcademyResponse, AssignCoachRequest, DashboardSnapshotResponse
+import enterprise_service
+
+@app.post("/api/enterprise/academy", response_model=AcademyResponse)
+async def create_academy(req: AcademyCreateRequest, user_id: str = Depends(require_accepted_terms)):
+    """Create a new Academy. The creator becomes the admin."""
+    from datetime import datetime
+    db = database.get_db()
+    if not db: raise HTTPException(status_code=500, detail="Database not connected")
+    
+    # Optional: check if user is already an admin of an academy
+    doc = {
+        "name": req.name,
+        "owner_id": user_id,
+        "created_at": datetime.utcnow()
+    }
+    result = await db.academies.insert_one(doc)
+    
+    # Update user roles and academy_id
+    await db.users.update_one(
+        {"_id": database.ObjectId(user_id)},
+        {"$addToSet": {"roles": "admin"}, "$set": {"academy_id": str(result.inserted_id)}}
+    )
+    
+    return AcademyResponse(id=str(result.inserted_id), name=req.name, owner_id=user_id, created_at=doc["created_at"])
+
+@app.post("/api/enterprise/academy/{academy_id}/invite")
+async def invite_to_academy(academy_id: str, email: str, role: str, user_id: str = Depends(require_accepted_terms)):
+    """Invite a user to the academy by email."""
+    db = database.get_db()
+    
+    # Verify inviter is admin of this academy
+    academy = await db.academies.find_one({"_id": database.ObjectId(academy_id)})
+    if not academy or academy["owner_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    invited_user = await database.get_user_by_email(email)
+    if not invited_user:
+        # In a real app, send an email invite. Here we just return a message.
+        return {"status": "pending", "message": "User not registered yet. Invite sent via email."}
+        
+    await db.users.update_one(
+        {"_id": invited_user["_id"]},
+        {"$set": {"academy_id": academy_id}, "$addToSet": {"roles": role}}
+    )
+    return {"status": "success", "message": f"User added to academy as {role}"}
+
+@app.post("/api/enterprise/user/{student_id}/assign_coach")
+async def assign_coach(student_id: str, req: AssignCoachRequest, user_id: str = Depends(require_accepted_terms)):
+    """Assign a coach to a student."""
+    db = database.get_db()
+    student = await database.get_user_by_id(student_id)
+    if not student: raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Validate coach
+    coach = await database.get_user_by_id(req.coach_id)
+    if not coach or "coach" not in coach.get("roles", []):
+        raise HTTPException(status_code=400, detail="Invalid coach ID")
+        
+    await db.users.update_one(
+        {"_id": database.ObjectId(student_id)},
+        {"$set": {"coach_id": req.coach_id}}
+    )
+    return {"status": "success", "message": "Coach assigned"}
+
+@app.get("/api/coach/students")
+async def get_coach_students(user_id: str = Depends(require_accepted_terms)):
+    """List all students assigned to the current coach."""
+    db = database.get_db()
+    user = await database.get_user_by_id(user_id)
+    if "coach" not in user.get("roles", []):
+        raise HTTPException(status_code=403, detail="Not a coach")
+        
+    cursor = db.users.find({"coach_id": user_id})
+    students = await cursor.to_list(length=100)
+    return [{"id": str(s["_id"]), "name": s["name"], "email": s["email"]} for s in students]
+
+@app.get("/api/coach/students/{student_id}/dashboard", response_model=DashboardSnapshotResponse)
+async def get_student_dashboard(student_id: str, timeframe: str = "all", user_id: str = Depends(require_accepted_terms)):
+    """Generate the Deep Insights dashboard for a student."""
+    # Verify coach has access to student
+    db = database.get_db()
+    student = await database.get_user_by_id(student_id)
+    if not student or student.get("coach_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this student")
+        
+    dashboard_data = await enterprise_service.generate_student_dashboard(student_id, timeframe)
+    if not dashboard_data:
+        raise HTTPException(status_code=500, detail="Failed to generate dashboard")
+        
+    return DashboardSnapshotResponse(**dashboard_data)
+
+from schema import AssignPuzzleRequest
+
+@app.post("/api/coach/students/{student_id}/assign_puzzle")
+async def assign_student_puzzle(student_id: str, req: AssignPuzzleRequest, user_id: str = Depends(require_accepted_terms)):
+    """Assign puzzles to a student (triggers push notification)."""
+    db = database.get_db()
+    student = await database.get_user_by_id(student_id)
+    if not student or student.get("coach_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    # Mocking push notification trigger logic
+    print(f"[PUSH NOTIFICATION] Sending to {student.get('name')}: Your coach assigned you {req.count} {req.motif} puzzles!")
+    
+    # In reality you would use firebase-admin SDK here:
+    # message = messaging.Message(
+    #     notification=messaging.Notification(
+    #         title="New Puzzles Assigned!",
+    #         body=f"Your coach assigned you {req.count} {req.motif} puzzles!"
+    #     ),
+    #     token=student.get('fcm_token')
+    # )
+    # messaging.send(message)
+    
+    return {"status": "success", "message": f"Assigned {req.count} {req.motif} puzzles to {student.get('name')}"}
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Starting ChessLensAI API on port {port}...")

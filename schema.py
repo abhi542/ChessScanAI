@@ -44,6 +44,9 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     plan: str = "free"
+    roles: List[str] = ["player"]
+    academy_id: Optional[str] = None
+    coach_id: Optional[str] = None
     terms_accepted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -120,3 +123,31 @@ class InsightModel(BaseModel):
     game_ids: list[str]
     insight_json: dict
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# --- Enterprise Models ---
+
+class AcademyCreateRequest(BaseModel):
+    name: str
+
+class AcademyResponse(BaseModel):
+    id: str
+    name: str
+    owner_id: str
+    created_at: datetime
+
+class AssignCoachRequest(BaseModel):
+    coach_id: str
+
+class DashboardSnapshotResponse(BaseModel):
+    student_name: str
+    games_analyzed: int
+    timeframe: str
+    accuracy: dict
+    problematic_pieces: list
+    mistakes_by_category: dict
+    playing_style: dict
+    top_blundered_squares: list
+
+class AssignPuzzleRequest(BaseModel):
+    motif: str
+    count: int

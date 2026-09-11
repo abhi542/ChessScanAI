@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessLensAI - Coach Deep Insights</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for dynamic charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --accent-orange: #f97316;
+            --accent-green: #10b981;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(239, 68, 68, 0.1), transparent 25%);
+            padding: 2rem;
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+
+        /* Glassmorphism Card */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-main);
+        }
+
+        /* Accuracy Phase */
+        .accuracy-card {
+            grid-column: span 12;
+        }
+        .phase-container {
+            display: flex;
+            gap: 1rem;
+        }
+        .phase-box {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+        .phase-title {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        .phase-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        /* Problematic Pieces */
+        .pieces-card {
+            grid-column: span 6;
+        }
+        .pieces-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .piece-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .piece-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+        .piece-stats {
+            text-align: right;
+        }
+        .piece-pct {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--accent-orange);
+        }
+        .piece-err {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Mistakes */
+        .mistakes-card {
+            grid-column: span 6;
+        }
+        .mistake-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: background 0.2s;
+        }
+        .mistake-row:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .mistake-name {
+            flex: 0 0 140px;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        .mistake-bar-container {
+            flex: 1;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 0 1rem;
+            overflow: hidden;
+        }
+        .mistake-bar-fill {
+            height: 100%;
+            background: var(--accent-red);
+            border-radius: 4px;
+        }
+        .mistake-count {
+            width: 20px;
+            text-align: right;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        /* Error Heatmap */
+        .heatmap-card {
+            grid-column: span 12;
+            display: flex;
+            gap: 2rem;
+        }
+        .heatmap-board {
+            flex: 0 0 250px;
+            width: 250px;
+            height: 250px;
+            background: #eab582; /* Light square */
+            background-image: 
+                linear-gradient(45deg, #a66a38 25%, transparent 25%, transparent 75%, #a66a38 75%, #a66a38), 
+                linear-gradient(45deg, #a66a38 25%, transparent 25%, transparent 75%, #a66a38 75%, #a66a38);
+            background-size: 62.5px 62.5px;
+            background-position: 0 0, 31.25px 31.25px;
+            border: 2px solid #555;
+            position: relative;
+        }
+        .heatmap-square {
+            position: absolute;
+            background: rgba(239, 68, 68, 0.8);
+            width: 31.25px;
+            height: 31.25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        .heatmap-list {
+            flex: 1;
+        }
+        .heatmap-list-title {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+        .heatmap-row {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .heatmap-square-name {
+            font-weight: 600;
+        }
+        .heatmap-err-count {
+            color: var(--accent-red);
+            font-size: 0.875rem;
+        }
+
+        /* Style Profile */
+        .style-card {
+            grid-column: span 12;
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+            border-left: 4px solid var(--accent-blue);
+        }
+        .style-class {
+            font-size: 1.5rem;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        .style-desc {
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .pieces-card, .mistakes-card {
+                grid-column: span 12;
+            }
+            .phase-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <div class="header">
+        <h1>🧠 Coach Deep Insights <span class="badge">Student: Magnus C.</span></h1>
+        <div style="color: var(--text-muted); font-size: 0.875rem;">Timeframe: Last 30 Games</div>
+    </div>
+
+    <div class="grid-layout">
+        
+        <!-- Style Profile -->
+        <div class="card style-card">
+            <div class="card-title">Playing Style Profile</div>
+            <div class="style-class">Aggressive / Tactical</div>
+            <div class="style-desc">
+                Magnus prefers sharp, open positions and actively seeks tactical complications. Strong attacking intuition, but occasionally overextends pawns in the middlegame leading to structural weaknesses in the endgame.
+                <br><br>
+                <small style="color: #4ade80;">Calculated automatically 5 games ago. Next update in 10 games.</small>
+            </div>
+        </div>
+
+        <!-- Accuracy by Phase -->
+        <div class="card accuracy-card">
+            <div class="card-title">Accuracy by Phase</div>
+            <div class="phase-container">
+                <div class="phase-box">
+                    <div class="phase-title">Opening</div>
+                    <div class="phase-value">84%</div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: 84%; background: var(--accent-blue);"></div>
+                    </div>
+                </div>
+                <div class="phase-box">
+                    <div class="phase-title">Middlegame</div>
+                    <div class="phase-value" style="color: var(--accent-orange);">62%</div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: 62%; background: var(--accent-orange);"></div>
+                    </div>
+                </div>
+                <div class="phase-box">
+                    <div class="phase-title">Endgame</div>
+                    <div class="phase-value">79%</div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: 79%; background: var(--accent-blue);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Problematic Pieces -->
+        <div class="card pieces-card">
+            <div class="card-title">Problematic Pieces</div>
+            <div class="pieces-grid">
+                <div class="piece-box" style="border-color: rgba(249, 115, 22, 0.3);">
+                    <div class="piece-name">♛ Queen</div>
+                    <div class="piece-stats">
+                        <div class="piece-pct">42%</div>
+                        <div class="piece-err">5 blunders</div>
+                    </div>
+                </div>
+                <div class="piece-box">
+                    <div class="piece-name">♝ Bishop</div>
+                    <div class="piece-stats">
+                        <div class="piece-pct" style="color: var(--text-main);">18%</div>
+                        <div class="piece-err">2 err</div>
+                    </div>
+                </div>
+                <div class="piece-box">
+                    <div class="piece-name">♞ Knight</div>
+                    <div class="piece-stats">
+                        <div class="piece-pct" style="color: var(--text-main);">12%</div>
+                        <div class="piece-err">1 err</div>
+                    </div>
+                </div>
+                <div class="piece-box">
+                    <div class="piece-name">♜ Rook</div>
+                    <div class="piece-stats">
+                        <div class="piece-pct" style="color: var(--text-main);">5%</div>
+                        <div class="piece-err">0 err</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mistakes by Category -->
+        <div class="card mistakes-card">
+            <div class="card-title">Mistakes by Motif (Math Classified)</div>
+            
+            <div class="mistake-row" title="Click to solve puzzles!">
+                <div class="mistake-name">Hanging Piece</div>
+                <div class="mistake-bar-container">
+                    <div class="mistake-bar-fill" style="width: 80%;"></div>
+                </div>
+                <div class="mistake-count">8</div>
+            </div>
+            
+            <div class="mistake-row" title="Click to solve puzzles!">
+                <div class="mistake-name">Missed Mate</div>
+                <div class="mistake-bar-container">
+                    <div class="mistake-bar-fill" style="width: 40%; background: var(--accent-orange);"></div>
+                </div>
+                <div class="mistake-count">4</div>
+            </div>
+
+            <div class="mistake-row" title="Click to solve puzzles!">
+                <div class="mistake-name">Fork / Double Attack</div>
+                <div class="mistake-bar-container">
+                    <div class="mistake-bar-fill" style="width: 30%; background: var(--accent-orange);"></div>
+                </div>
+                <div class="mistake-count">3</div>
+            </div>
+
+            <div class="mistake-row" title="Click to solve puzzles!">
+                <div class="mistake-name">Pin</div>
+                <div class="mistake-bar-container">
+                    <div class="mistake-bar-fill" style="width: 10%; background: var(--accent-green);"></div>
+                </div>
+                <div class="mistake-count">1</div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 1rem;">
+                <button style="background: rgba(255,255,255,0.05); color: var(--accent-blue); border: 1px solid rgba(59,130,246,0.3); padding: 0.5rem 1rem; border-radius: 0.5rem; cursor: pointer;">
+                    View Assigned Puzzles
+                </button>
+            </div>
+        </div>
+
+        <!-- Error Heatmap -->
+        <div class="card heatmap-card">
+            <div style="display: flex; flex-direction: column; width: 100%;">
+                <div class="card-title" style="margin-bottom: 1rem;">Error Heatmap</div>
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <!-- Chessboard simulation -->
+                    <div class="heatmap-board">
+                        <!-- d4 square (row 4 from top, col 3 from left => top 125, left 93.75) -->
+                        <div class="heatmap-square" style="top: 125px; left: 93.75px;">1</div>
+                        <!-- f7 square (row 1 from top, col 5 from left => top 31.25, left 156.25) -->
+                        <div class="heatmap-square" style="top: 31.25px; left: 156.25px;">1</div>
+                        <!-- g6 square (row 2 from top, col 6 from left => top 62.5, left 187.5) -->
+                        <div class="heatmap-square" style="top: 62.5px; left: 187.5px;">1</div>
+                    </div>
+                    
+                    <!-- Top Blundered Squares List -->
+                    <div class="heatmap-list">
+                        <div class="heatmap-list-title">Top Blundered Squares</div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-square-name">Square d4</span>
+                            <span class="heatmap-err-count">1 errors</span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-square-name">Square g6</span>
+                            <span class="heatmap-err-count">1 errors</span>
+                        </div>
+                        <div class="heatmap-row">
+                            <span class="heatmap-square-name">Square f7</span>
+                            <span class="heatmap-err-count">1 errors</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // In a real application, we would fetch data from our new endpoints:
+    // fetch('/api/coach/students/magnus_id/dashboard')
+    //   .then(res => res.json())
+    //   .then(data => renderDashboard(data));
+    console.log("Dashboard Loaded!");
+</script>
+</body>
+</html>

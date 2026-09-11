@@ -292,6 +292,14 @@ async def check_usage_limit(user_id: str, feature: str) -> bool:
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user: return False
     
+    # Enterprise Billing Override
+    academy_id = user.get("academy_id")
+    if academy_id:
+        academy = await db.academies.find_one({"_id": ObjectId(academy_id)})
+        if academy and academy.get("enterprise_tier") == True:
+            # Bypass limits entirely for enterprise academy members
+            return True
+
     plan = user.get("plan", "free")
     limits = config.PRO_TIER_LIMITS if plan == "premium" else config.FREE_TIER_LIMITS
     max_allowed = limits.get(feature, 5)
